@@ -1,18 +1,19 @@
 .log-panel {
   width: 210px;
-  background: #07070f;
-  border-left: 1px solid #1e1e4a;
+  background: var(--bg-panel);
+  border-left: 1px solid var(--border-main);
   padding: 10px;
   display: flex;
   flex-direction: column;
   gap: 3px;
   overflow-y: auto;
   flex-shrink: 0;
+  transition: all 0.3s ease;
 }
 
 .log-title {
   font-size: 10px;
-  color: #7eb8ff;
+  color: var(--text-accent);
   text-transform: uppercase;
   letter-spacing: 2px;
   margin-bottom: 6px;
@@ -20,15 +21,15 @@
 
 .entry {
   font-size: 11px;
-  color: #555;
+  color: var(--text-dim);
   padding: 3px 0;
-  border-bottom: 1px solid #0d0d1f;
+  border-bottom: 1px solid var(--border-dim);
   line-height: 1.4;
 
-  &.latest { color: #e0e0ff; }
+  &.latest { color: var(--text-main); }
 }
 
 .empty {
-  color: #222;
+  color: var(--text-sub);
   font-size: 12px;
 }
