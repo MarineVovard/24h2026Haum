@@ -13,6 +13,8 @@
   --scrollbar-thumb: #1e1e4a;
   --scrollbar-thumb-hover: #2e2e6a;
   --debug-bg: #1a1a0a;
+  --shadow-sm: none;
+  --shadow-md: none;
 }
 
 @media (prefers-color-scheme: light) {
@@ -34,11 +36,6 @@
     --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1);
     --shadow-md: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
   }
-}
-
-:root {
-  --shadow-sm: none;
-  --shadow-md: none;
 }
 
 * {
