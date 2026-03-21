@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["src/app/components/event-log/event-log.component.scss"],
+  "sourcesContent": [".log-panel {\n  width: 210px;\n  background: var(--bg-panel);\n  border-left: 1px solid var(--border-main);\n  padding: 10px;\n  display: flex;\n  flex-direction: column;\n  gap: 3px;\n  overflow-y: auto;\n  flex-shrink: 0;\n  transition: all 0.3s ease;\n}\n\n.log-title {\n  font-size: 10px;\n  color: var(--text-accent);\n  text-transform: uppercase;\n  letter-spacing: 2px;\n  margin-bottom: 6px;\n}\n\n.entry {\n  font-size: 11px;\n  color: var(--text-dim);\n  padding: 3px 0;\n  border-bottom: 1px solid var(--border-dim);\n  line-height: 1.4;\n\n  &.latest { color: var(--text-main); }\n}\n\n.empty {\n  color: var(--text-sub);\n  font-size: 12px;\n}\n"],
+  "mappings": ";AAAA,CAAA;AACE,SAAA;AACA,cAAA,IAAA;AACA,eAAA,IAAA,MAAA,IAAA;AACA,WAAA;AACA,WAAA;AACA,kBAAA;AACA,OAAA;AACA,cAAA;AACA,eAAA;AACA,cAAA,IAAA,KAAA;;AAGF,CAAA;AACE,aAAA;AACA,SAAA,IAAA;AACA,kBAAA;AACA,kBAAA;AACA,iBAAA;;AAGF,CAAA;AACE,aAAA;AACA,SAAA,IAAA;AACA,WAAA,IAAA;AACA,iBAAA,IAAA,MAAA,IAAA;AACA,eAAA;;AAEA,CAPF,KAOE,CAAA;AAAW,SAAA,IAAA;;AAGb,CAAA;AACE,SAAA,IAAA;AACA,aAAA;;",
+  "names": []
+}
