@@ -1,0 +1,30 @@
+meta {
+  name: 5. Drop Mine
+  type: ws
+  seq: 5
+}
+
+ws {
+  url: wss://24hc26.haum.org/ws
+}
+
+body:json {
+  {
+    "type": "drop_mine",
+    "delay": 3.0
+  }
+}
+
+docs {
+  ### Poser une mine
+  
+  **Type:** `drop_mine`
+  **Coût:** 10 d'énergie.
+  
+  **Paramètres :**
+  - `delay`: Temps (secondes) avant armement.
+  
+  **Détails :**
+  - Posée sur votre position actuelle.
+  - Une explosion peut en ramener d'autres (réaction en chaîne).
+}

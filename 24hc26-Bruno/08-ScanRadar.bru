@@ -1,0 +1,28 @@
+meta {
+  name: 8. Scan Radar
+  type: ws
+  seq: 8
+}
+
+ws {
+  url: wss://24hc26.haum.org/ws
+}
+
+body:json {
+  {
+    "type": "scan_radar"
+  }
+}
+
+docs {
+  ### Scan actif Radar
+  
+  **Type:** `scan_radar`
+  **Coût:** 5 d'énergie.
+  
+  **Réponse du serveur :**
+  Plusieurs messages `active_scan` :
+  `{ "type": "active_scan", "what": "vessel" | "asteroid" | "mine" | "torpedo" | "resource", "position": [dx, dy] }`
+  
+  Les positions sont relatives à votre vaisseau.
+}

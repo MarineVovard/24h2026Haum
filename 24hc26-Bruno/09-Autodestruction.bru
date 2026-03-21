@@ -1,0 +1,26 @@
+meta {
+  name: 9. Autodestruction
+  type: ws
+  seq: 9
+}
+
+ws {
+  url: wss://24hc26.haum.org/ws
+}
+
+body:json {
+  {
+    "type": "autodestruction"
+  }
+}
+
+docs {
+  ### Autodestruction (BOOM !)
+  
+  **Type:** `autodestruction`
+  
+  **Détails :**
+  - Inflige **20 dégâts** à tous les vaisseaux dans un rayon de 5.
+  - Détruit les mines proches.
+  - La connexion WebSocket est fermée juste après.
+}

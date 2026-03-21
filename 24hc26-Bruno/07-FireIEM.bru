@@ -1,0 +1,28 @@
+meta {
+  name: 7. Fire IEM
+  type: ws
+  seq: 7
+}
+
+ws {
+  url: wss://24hc26.haum.org/ws
+}
+
+body:json {
+  {
+    "type": "fire_iem",
+    "direction": [1, 1]
+  }
+}
+
+docs {
+  ### Impulsion Électromagnétique (IEM)
+  
+  **Type:** `fire_iem`
+  **Coût:** 30 d'énergie.
+  
+  **Détails :**
+  - Gèle tous les vaisseaux sur la trajectoire pendant **5 secondes**.
+  - Portée déterminée par la stat **A**.
+  - Les vaisseaux gelés reçoivent des messages `iem_frozen`.
+}

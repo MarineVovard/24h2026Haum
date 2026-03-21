@@ -1,0 +1,28 @@
+meta {
+  name: 4. Fire Torpedo
+  type: ws
+  seq: 4
+}
+
+ws {
+  url: wss://24hc26.haum.org/ws
+}
+
+body:json {
+  {
+    "type": "fire_torpedo",
+    "direction": [2, 1]
+  }
+}
+
+docs {
+  ### Tirer une torpille
+  
+  **Type:** `fire_torpedo`
+  **Coût:** 10 d'énergie.
+  
+  **Détails :**
+  - La torpille se déplace à chaque tick.
+  - Inflige **20 dégâts** au premier vaisseau touché.
+  - Est détruite par les astéroïdes et les mines.
+}

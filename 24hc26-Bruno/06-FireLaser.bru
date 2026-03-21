@@ -1,0 +1,29 @@
+meta {
+  name: 6. Fire Laser
+  type: ws
+  seq: 6
+}
+
+ws {
+  url: wss://24hc26.haum.org/ws
+}
+
+body:json {
+  {
+    "type": "fire_laser",
+    "direction": [5, 0]
+  }
+}
+
+docs {
+  ### Tirer au laser
+  
+  **Type:** `fire_laser`
+  **Coût:** 50 d'énergie (Cher !).
+  
+  **Détails :**
+  - Rayon instantané.
+  - Inflige **20 dégâts** au premier vaisseau touché.
+  - Portée maximale déterminée par la stat **A**.
+  - Stoppé par astéroïdes, ressources et mines.
+}
