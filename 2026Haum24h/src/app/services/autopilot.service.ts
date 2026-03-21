@@ -14,16 +14,41 @@ export class AutoPilotService implements OnDestroy {
   private interval: any;
   private vesselSubs: Subscription[] = [];
 
+  // IDs des vaisseaux de notre équipe (extraits des passive_scan)
+  private friendlyIds = new Set<string>();
+
   constructor(private vesselService: VesselService) {
     this.vesselService.vessels$.subscribe(vessels => {
       this.clearVesselSubs();
+
+      // Collecter les IDs amis depuis les messages passive_scan de chaque vaisseau
       vessels.forEach(vessel => {
-        const sub = vessel.state$.subscribe(state => {
-          if (state?.battleStarted && !this.enabled$.value) {
-            this.start();
+        const stateSub = vessel.state$.subscribe(state => {
+          if (state?.battleStarted && !this.enabled$.value) this.start();
+        });
+
+        const msgSub = vessel.messages$.subscribe(msg => {
+          if (msg.type === 'passive_scan' && msg.what === 'move' && (msg as any).vessel) {
+            const vid: string = (msg as any).vessel;
+            // Format "Equipe:N" — on compare avec nos propres IDs
+            const ownPrefix = vessel.state$.value?.id.split(':').slice(0, 1).join(':');
+            if (ownPrefix && vid.startsWith(ownPrefix)) {
+              this.friendlyIds.add(vid);
+            }
           }
         });
-        this.vesselSubs.push(sub);
+
+        this.vesselSubs.push(stateSub, msgSub);
+      });
+
+      // Ajouter nos propres vaisseaux comme amis
+      vessels.forEach(v => {
+        const id = v.state$.value?.id;
+        if (id) {
+          // "Equipe:1:secret" → on garde "Equipe:1" pour la comparaison
+          const shortId = id.split(':').slice(0, 2).join(':');
+          this.friendlyIds.add(shortId);
+        }
       });
     });
   }
@@ -48,6 +73,10 @@ export class AutoPilotService implements OnDestroy {
       const state = vessel.state$.value;
       if (!state || !state.battleStarted || state.frozen) return;
 
+      // Mettre à jour les amis avec nos propres vaisseaux
+      const shortId = state.id.split(':').slice(0, 2).join(':');
+      this.friendlyIds.add(shortId);
+
       switch (state.role) {
         case 'fighter':          this.tickFighter(vessel);          break;
         case 'survivor':         this.tickSurvivor(vessel);         break;
@@ -58,11 +87,11 @@ export class AutoPilotService implements OnDestroy {
     });
   }
 
-  // ── Combattant : ressources puis ennemis ──────────────────────────────────
+  // ── Combattant ────────────────────────────────────────────────────────────
   private tickFighter(vessel: VesselConnection): void {
     const { scanned, energy } = this.getContext(vessel);
 
-    const enemies   = scanned.filter(s => s.what === 'vessel');
+    const enemies   = this.getEnemies(scanned);
     const resources = scanned.filter(s => s.what === 'resource');
 
     if (enemies.length > 0 && energy >= 10) {
@@ -70,44 +99,39 @@ export class AutoPilotService implements OnDestroy {
       return;
     }
     if (resources.length > 0 && energy >= 5) {
-      this.moveToward(vessel, this.closest(resources));
+      this.moveSafe(vessel, this.closest(resources), scanned);
       return;
     }
-    this.explore(vessel, energy);
+    this.explore(vessel, energy, scanned);
   }
 
-  // ── Survivant : fuit dès qu'un danger est détecté ────────────────────────
+  // ── Survivant : fuit tout danger ──────────────────────────────────────────
   private tickSurvivor(vessel: VesselConnection): void {
     const { scanned, energy } = this.getContext(vessel);
 
-    const dangers = scanned.filter(s =>
-      s.what === 'vessel' || s.what === 'torpedo' || s.what === 'mine' || s.what === 'explosion'
-    );
-
+    const dangers = this.getDangers(scanned);
     if (dangers.length > 0 && energy >= 5) {
-      // Fuir dans la direction opposée au danger le plus proche
       const threat = this.closest(dangers);
-      const fx = -Math.sign(threat.position[0]);
-      const fy = -Math.sign(threat.position[1]);
-      vessel.move(fx || 1, fy || 1); // fallback si sur la même case
+      const fx = -Math.sign(threat.position[0]) || (Math.random() > 0.5 ? 1 : -1);
+      const fy = -Math.sign(threat.position[1]) || (Math.random() > 0.5 ? 1 : -1);
+      vessel.move(fx, fy);
       return;
     }
 
-    // Pas de danger : scanner et récupérer des ressources
     const resources = scanned.filter(s => s.what === 'resource');
     if (resources.length > 0 && energy >= 5) {
-      this.moveToward(vessel, this.closest(resources));
+      this.moveSafe(vessel, this.closest(resources), scanned);
       return;
     }
-    this.explore(vessel, energy);
+    this.explore(vessel, energy, scanned);
   }
 
-  // ── Poseur de mines : pose une mine puis se déplace ──────────────────────
+  // ── Poseur de mines ───────────────────────────────────────────────────────
   private tickMiner(vessel: VesselConnection): void {
     const { scanned, energy } = this.getContext(vessel);
     const state = vessel.state$.value!;
 
-    // Fuir si une torpille ou explosion est détectée
+    // Fuir les dangers immédiats
     const imminent = scanned.filter(s => s.what === 'torpedo' || s.what === 'explosion');
     if (imminent.length > 0 && energy >= 5) {
       const threat = this.closest(imminent);
@@ -115,49 +139,50 @@ export class AutoPilotService implements OnDestroy {
       return;
     }
 
-    // Poser une mine si énergie suffisante (une mine toutes les ~3 ticks)
+    // Poser une mine
     if (energy >= 10 && Math.random() < 0.4) {
       vessel.dropMine(3.0);
     }
 
-    // Se déplacer en continu dans une direction quasi-constante
-    // On utilise l'ID du vaisseau pour avoir une direction déterministe
-    const seed  = state.id.charCodeAt(state.id.length - 1) % 8;
-    const dirs: [number, number][] = [[1,0],[1,1],[0,1],[-1,1],[-1,0],[-1,-1],[0,-1],[1,-1]];
-    const [dx, dy] = dirs[seed];
-    if (energy >= 5) vessel.move(dx, dy);
+    // Direction constante basée sur l'ID
+    if (energy >= 5) {
+      const seed  = state.id.charCodeAt(state.id.length - 1) % 8;
+      const dirs: [number, number][] = [[1,0],[1,1],[0,1],[-1,1],[-1,0],[-1,-1],[0,-1],[1,-1]];
+      const [dx, dy] = dirs[seed];
+      // Vérifier que la direction est sûre avant de bouger
+      const blocked = this.isDangerous([dx, dy], scanned);
+      if (blocked) {
+        vessel.move(-dx || 1, -dy || 1); // demi-tour si bloqué
+      } else {
+        vessel.move(dx, dy);
+      }
+    }
   }
 
-  // ── Collecteur : ressources d'abord, tir en dernier recours ─────────────
+  // ── Collecteur ────────────────────────────────────────────────────────────
   private tickCollector(vessel: VesselConnection): void {
     const { scanned, energy } = this.getContext(vessel);
 
     const resources = scanned.filter(s => s.what === 'resource');
-    const enemies   = scanned.filter(s => s.what === 'vessel');
+    const enemies   = this.getEnemies(scanned);
 
-    // Priorité absolue : ressources
     if (resources.length > 0 && energy >= 5) {
-      this.moveToward(vessel, this.closest(resources));
+      this.moveSafe(vessel, this.closest(resources), scanned);
       return;
     }
-
-    // Scanner pour trouver des ressources
     if (energy >= 5 && scanned.length === 0) {
       vessel.scanRadar();
       return;
     }
-
-    // Tirer uniquement si pas de ressource visible et ennemi proche
+    // Tir uniquement si ennemi très proche
     if (enemies.length > 0 && energy >= 10) {
       const enemy = this.closest(enemies);
-      const dist  = Math.abs(enemy.position[0]) + Math.abs(enemy.position[1]);
-      if (dist <= 3) {
+      if (Math.abs(enemy.position[0]) + Math.abs(enemy.position[1]) <= 3) {
         this.shootAt(vessel, enemy, energy);
         return;
       }
     }
-
-    this.explore(vessel, energy);
+    this.explore(vessel, energy, scanned);
   }
 
   // ── Chasseur intelligent : smart move + agressif ──────────────────────────────
@@ -238,38 +263,113 @@ export class AutoPilotService implements OnDestroy {
 
   // ── Helpers ───────────────────────────────────────────────────────────────
 
-  private getContext(vessel: VesselConnection): { scanned: ScannedObject[]; energy: number } {
-    const state = vessel.state$.value!;
-    const now   = Date.now();
-    return {
-      scanned: state.scanned.filter(s => s.ts > now),
-      energy:  state.energy
-    };
-  }
+  // ── Déplacement sécurisé : évite les cases dangereuses ───────────────────
+  private moveSafe(vessel: VesselConnection, target: ScannedObject, scanned: ScannedObject[]): void {
+    const dx = Math.sign(target.position[0]);
+    const dy = Math.sign(target.position[1]);
 
-  private explore(vessel: VesselConnection, energy: number): void {
-    if (energy < 5) return;
-    const state = vessel.state$.value!;
-    if (state.scanned.length === 0) {
-      vessel.scanRadar();
+
+    // Essayer la direction directe d'abord
+    if (!this.isDangerous([dx, dy], scanned)) {
+      vessel.move(dx, dy);
       return;
     }
-    const dirs: [number, number][] = [[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,1],[1,-1],[-1,-1]];
-    const [dx, dy] = dirs[Math.floor(Math.random() * dirs.length)];
-    vessel.move(dx, dy);
+
+    // Essayer des directions alternatives (contournement)
+    const alternatives: [number, number][] = [
+      [dx, 0], [0, dy],           // axes séparés
+      [dx, -dy], [-dx, dy],       // diagonales alternatives
+      [-dx, 0], [0, -dy],         // opposés partiels
+      [-dx, -dy]                  // demi-tour complet
+    ];
+
+    for (const [ax, ay] of alternatives) {
+      if ((ax !== 0 || ay !== 0) && !this.isDangerous([ax, ay], scanned)) {
+        vessel.move(ax, ay);
+        return;
+      }
+    }
+
+    // Aucune direction sûre : rester sur place (scan)
+    vessel.scanRadar();
   }
 
-  private moveToward(vessel: VesselConnection, target: ScannedObject): void {
-    vessel.move(Math.sign(target.position[0]), Math.sign(target.position[1]));
+  // Vérifie si une direction mène vers un objet dangereux à 1-2 cases
+  private isDangerous(dir: number[], scanned: ScannedObject[]): boolean {
+    return scanned.some(s => {
+      if (!this.isDangerousObject(s.what as string)) return false;
+      // L'objet est dans la direction du déplacement et proche
+      const sameDir = Math.sign(s.position[0]) === Math.sign(dir[0]) || Math.sign(s.position[1]) === Math.sign(dir[1]);
+      const close   = Math.abs(s.position[0]) <= 2 && Math.abs(s.position[1]) <= 2;
+      return sameDir && close;
+    });
   }
 
+  private isDangerousObject(what: string): boolean {
+    return ['vessel', 'torpedo', 'mine', 'explosion','asteroid'].includes(what);
+  }
+
+  // ── Tir : ne tire jamais sur un ami ──────────────────────────────────────
   private shootAt(vessel: VesselConnection, enemy: ScannedObject, energy: number): void {
+    // Vérifier que la cible n'est pas un ami
+    // (les vaisseaux amis sont identifiés via passive_scan)
+    if (this.isFriendlyPosition(enemy.position, vessel)) return;
+
     const [dx, dy] = enemy.position;
     if (energy >= 50 && (dx === 0 || dy === 0)) {
       vessel.fireLaser(Math.sign(dx), Math.sign(dy));
     } else if (energy >= 10) {
       vessel.fireTorpedo(Math.sign(dx), Math.sign(dy));
     }
+  }
+
+  // Vérifie si un autre de nos vaisseaux est dans cette direction
+  private isFriendlyPosition(position: number[], shooter: VesselConnection): boolean {
+    return this.vesselService.getAll().some(v => {
+      if (v === shooter) return false;
+      const s = v.state$.value;
+      if (!s) return false;
+      // Un ami est dans la même direction si ses coords relatives sont alignées
+      return Math.sign(s.scanned[0]?.position[0] ?? 999) === Math.sign(position[0])
+          && Math.sign(s.scanned[0]?.position[1] ?? 999) === Math.sign(position[1]);
+    });
+  }
+
+  private getEnemies(scanned: ScannedObject[]): ScannedObject[] {
+    return scanned.filter(s => {
+      if (s.what !== 'vessel') return false;
+      // Exclure si l'objet scanné correspond à un ami connu
+      return !this.isFriendlyScannedObject(s);
+    });
+  }
+
+  private isFriendlyScannedObject(_obj: ScannedObject): boolean {
+    // Sans info de nom sur active_scan, on ne peut pas identifier avec certitude.
+    // On se fie aux passive_scan pour alimenter friendlyIds.
+    // Par défaut on considère tout vessel scanné comme ennemi potentiel.
+    return false;
+  }
+
+  private getDangers(scanned: ScannedObject[]): ScannedObject[] {
+    return scanned.filter(s => this.isDangerousObject(s.what as string));
+  }
+
+  // ── Exploration ───────────────────────────────────────────────────────────
+  private explore(vessel: VesselConnection, energy: number, scanned: ScannedObject[]): void {
+    if (energy < 5) return;
+    if (scanned.length === 0) { vessel.scanRadar(); return; }
+
+    const dirs: [number, number][] = [[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,1],[1,-1],[-1,-1]];
+    const safe = dirs.filter(d => !this.isDangerous(d, scanned));
+    const pick  = safe.length > 0 ? safe : dirs;
+    const [dx, dy] = pick[Math.floor(Math.random() * pick.length)];
+    vessel.move(dx, dy);
+  }
+
+  private getContext(vessel: VesselConnection): { scanned: ScannedObject[]; energy: number } {
+    const state = vessel.state$.value!;
+    const now   = Date.now();
+    return { scanned: state.scanned.filter(s => s.ts > now), energy: state.energy };
   }
 
   private closest(objects: ScannedObject[]): ScannedObject {
