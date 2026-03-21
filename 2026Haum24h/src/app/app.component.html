@@ -8,6 +8,9 @@
     <button class="debug-toggle" (click)="toggleDebug()">
       {{ showDebug ? '🐛 Masquer debug' : '🐛 Debug' }}
     </button>
+    <button class="debug-toggle" (click)="databaseService.exportCurrentSession()">
+      💾 Exporter log de partie (JSON)
+    </button>
     @if (battleReady) {
       <button class="reset-btn" (click)="reset()">↩ Réinitialiser</button>
     }

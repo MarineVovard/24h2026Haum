@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Subject } from 'rxjs';
 import { InMessage, OutMessage, VesselState, ScannedObject } from '../models/protocol.models';
+import { DatabaseService } from './database.service';
 
 export class VesselConnection {
 
@@ -132,11 +133,26 @@ export class VesselConnection {
 export class VesselService {
   connections = new Map<string, VesselConnection>();
 
+  constructor(private databaseService: DatabaseService) {}
+
   createAll(ids: string[], serverUrl: string, needKeys: boolean, key?: string): void {
     this.connections.clear();
     ids.forEach(id => {
       const conn = new VesselConnection(serverUrl);
       conn.connect(id, needKeys, key);
+      
+      // Stocke automatiquement toutes les données et événements reçus du vaisseau
+      conn.messages$.subscribe(msg => {
+        this.databaseService.logMessage(id, msg);
+      });
+
+      // Intercepte les commandes envoyées pour les logger aussi (Replay complet)
+      const originalSend = conn.send.bind(conn);
+      conn.send = (outMsg: OutMessage) => {
+        originalSend(outMsg);
+        this.databaseService.logMessage(id, outMsg, true);
+      };
+
       this.connections.set(id, conn);
     });
   }

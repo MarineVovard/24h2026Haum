@@ -6,6 +6,7 @@ import { GridComponent } from './components/grid/grid.component';
 import { FleetPanelComponent } from './components/fleet-panel/fleet-panel.component';
 import { EventLogComponent } from './components/event-log/event-log.component';
 import { SetupComponent } from './components/setup/setup.component';
+import { DatabaseService } from './services/database.service';
 
 @Component({
   selector: 'app-root',
@@ -27,7 +28,8 @@ export class AppComponent implements OnInit {
 
   constructor(
     public wsService:     WebSocketService,
-    public vesselService: VesselService
+    public vesselService: VesselService,
+    public databaseService: DatabaseService
   ) {}
 
   ngOnInit(): void {
@@ -44,6 +46,10 @@ export class AppComponent implements OnInit {
   onSetup(cfg: { serverUrl: string; team: string; key: string; vessels: [number,number,number,number][] }): void {
     this.serverUrl = cfg.serverUrl;
     this.key       = cfg.key;
+    
+    // Démarre une nouvelle session en base de données
+    this.databaseService.startNewGame(cfg.team);
+
     this.wsService.connect(cfg.serverUrl);
     setTimeout(() => {
       this.wsService.registerFleet(cfg.team, cfg.vessels, cfg.key || undefined);
