@@ -1,0 +1,51 @@
+<div class="setup">
+  <div class="logo">🐜 MARABUNTA</div>
+  <h2>Configuration de la flotte</h2>
+
+  <div class="field">
+    <label>Serveur WebSocket</label>
+    <input type="text" [(ngModel)]="serverUrl" placeholder="ws://24hc26.haum.org">
+  </div>
+  <div class="field">
+    <label>Nom d'équipe</label>
+    <input type="text" [(ngModel)]="team" placeholder="MonEquipe">
+  </div>
+  <div class="field">
+    <label>Clé d'équipe</label>
+    <input type="password" [(ngModel)]="key" placeholder="(si requise par le serveur)">
+  </div>
+
+  <h3>Vaisseaux <small>max 6 — somme totale ≤ 25</small></h3>
+
+  <div class="vessels">
+    @for (v of vessels; track $index; let i = $index) {
+      <div class="vessel-row">
+        <span class="vessel-num">#{{ i + 1 }}</span>
+        @for (stat of statNames; track stat; let j = $index) {
+          <label class="stat-label">
+            <span>{{ stat }}</span>
+            <input type="number" min="0" max="9"
+              [(ngModel)]="vessels[i][j]"
+              (ngModelChange)="clamp(i, j)">
+          </label>
+        }
+        <span class="row-total" [class.over]="rowTotal(i) > 9">Σ {{ rowTotal(i) }}</span>
+        <button class="rm-btn" (click)="removeVessel(i)" [disabled]="vessels.length <= 1">✕</button>
+      </div>
+    }
+  </div>
+
+  <div class="fleet-total" [class.over]="fleetTotal > 25">
+    Total flotte : <strong>{{ fleetTotal }}</strong> / 25
+    @if (fleetTotal > 25) { <span class="warning">⚠️ Dépasse la limite !</span> }
+  </div>
+
+  <div class="actions">
+    <button class="add-btn" (click)="addVessel()" [disabled]="vessels.length >= 6">
+      + Vaisseau
+    </button>
+    <button class="launch-btn" (click)="launch()" [disabled]="fleetTotal > 25 || !team || !serverUrl">
+      ⚡ Lancer la flotte
+    </button>
+  </div>
+</div>

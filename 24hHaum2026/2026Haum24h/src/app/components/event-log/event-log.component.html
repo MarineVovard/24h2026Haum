@@ -1,0 +1,11 @@
+<div class="log-panel">
+  <div class="log-title">📋 Journal</div>
+
+  @if (vessel?.state$ | async; as s) {
+    @for (entry of s.log; track $index) {
+      <div class="entry" [class.latest]="$index === 0">{{ entry }}</div>
+    }
+  } @else {
+    <div class="empty">—</div>
+  }
+</div>
