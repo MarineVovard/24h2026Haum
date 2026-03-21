@@ -12,9 +12,9 @@ import { FormsModule } from '@angular/forms';
 export class SetupComponent {
   @Output() onConnect = new EventEmitter<any>();
 
-  serverUrl = 'ws://24hc26.haum.org';
-  team      = '';
-  key       = '';
+  serverUrl = 'wss://24hc26.haum.org';
+  team      = 'MMAGiciens';
+  key       = '8c023cYoPHcyNg';
   statNames = ['H', 'A', 'S', 'R'];
 
   vessels: [number, number, number, number][] = [
