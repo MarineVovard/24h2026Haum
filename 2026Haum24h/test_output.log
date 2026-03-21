@@ -1,0 +1,14 @@
+=== DÉBUT DES TESTS DE NAVIGATION ===
+
+Test 1: Chemin dégagé vers la cible (0, 10)
+Résultat attendu: direction [0, 5]
+Mouvement calculé: [0.00, 5.00]
+
+Test 2: Un obstacle plein centre bloque la route (0, 5) avec un rayon de 3 !
+Résultat attendu: Le vaisseau devrait faire un pas en biais pour esquiver.
+Mouvement calculé: [3.54, 3.54]
+
+Test 3: Cible proche (0, 4) bloquée par un mur en (0, 2)
+Résultat attendu: Esquive en diagonale au lieu d'y aller direct.
+Mouvement calculé: [4.16, 2.78]
+

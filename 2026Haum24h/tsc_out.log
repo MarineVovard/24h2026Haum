@@ -1,0 +1,1 @@
+src/app/services/smart-navigation.ts(115,26): error TS2802: Type 'MapIterator<Node>' can only be iterated through when using the '--downlevelIteration' flag or with a '--target' of 'es2015' or higher.
