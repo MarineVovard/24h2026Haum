@@ -1,33 +1,39 @@
 .panel {
   width: 190px;
-  background: #0a0a1f;
-  border-right: 1px solid #1e1e4a;
+  background: var(--bg-header);
+  border-right: 1px solid var(--border-main);
   padding: 10px;
   display: flex;
   flex-direction: column;
   gap: 8px;
   overflow-y: auto;
   flex-shrink: 0;
+  transition: all 0.3s ease;
 }
 
 .panel-title {
   font-size: 10px;
-  color: #7eb8ff;
+  color: var(--text-accent);
   text-transform: uppercase;
   letter-spacing: 2px;
   margin-bottom: 4px;
 }
 
 .vessel-card {
-  background: #0d0d22;
-  border: 1px solid #1a1a3a;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-dim);
   border-radius: 8px;
   padding: 10px;
   cursor: pointer;
-  transition: border-color 0.15s;
+  transition: all 0.2s ease;
+  box-shadow: var(--shadow-sm);
 
-  &.selected { border-color: #7eb8ff; background: #0d0d2a; }
-  &:hover:not(.selected) { border-color: #2a2a5a; }
+  &.selected { 
+    border-color: var(--text-accent); 
+    background: var(--bg-main);
+    box-shadow: var(--shadow-md);
+  }
+  &:hover:not(.selected) { border-color: var(--border-main); }
 }
 
 .vessel-header {
@@ -38,7 +44,7 @@
 
   .vessel-id {
     font-size: 10px;
-    color: #666;
+    color: var(--text-dim);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -59,7 +65,7 @@
   .bar-bg {
     flex: 1;
     height: 5px;
-    background: #1a1a2e;
+    background: var(--border-dim);
     border-radius: 3px;
     overflow: hidden;
   }
@@ -74,7 +80,7 @@
   .hp-bar  { background: #4caf50; }
   .nrj-bar { background: #2196f3; }
 
-  .bar-val { font-size: 9px; color: #555; width: 30px; text-align: right; flex-shrink: 0; }
+  .bar-val { font-size: 9px; color: var(--text-dim); width: 30px; text-align: right; flex-shrink: 0; }
 }
 
 .stats {
@@ -88,10 +94,11 @@
   flex-direction: column;
   align-items: center;
   flex: 1;
-  background: #060612;
+  background: var(--bg-main);
   border-radius: 4px;
   padding: 3px 2px;
+  transition: all 0.3s ease;
 
-  .stat-name { font-size: 8px;  color: #7eb8ff; }
-  .stat-val  { font-size: 11px; color: #e0e0ff; font-weight: bold; }
+  .stat-name { font-size: 8px;  color: var(--text-accent); }
+  .stat-val  { font-size: 11px; color: var(--text-main); font-weight: bold; }
 }

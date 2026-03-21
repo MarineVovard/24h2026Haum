@@ -30,6 +30,7 @@ export class VesselConnection {
 
   private handleMessage(msg: InMessage, id: string): void {
     const cur = this.state$.value;
+    console.log(msg);
 
     switch (msg.type) {
       case 'stats':
