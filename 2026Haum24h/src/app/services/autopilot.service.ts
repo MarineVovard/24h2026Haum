@@ -2,6 +2,7 @@ import { Injectable, OnDestroy } from '@angular/core';
 import { BehaviorSubject, Subscription } from 'rxjs';
 import { VesselService, VesselConnection } from './vessel.service';
 import { ScannedObject, VesselRole } from '../models/protocol.models';
+import { BEST_MODEL_WEIGHTS } from '../models/neural-weights';
 
 const TICK_MS = 1500;
 
@@ -81,6 +82,8 @@ export class AutoPilotService implements OnDestroy {
         case 'survivor':  this.tickSurvivor(vessel);  break;
         case 'miner':     this.tickMiner(vessel);     break;
         case 'collector': this.tickCollector(vessel); break;
+        case 'smart_aggressive': break; // handled elsewhere it seems
+        case 'neural_network': this.tickNeuralNetwork(vessel); break;
       }
     });
   }
@@ -181,6 +184,64 @@ export class AutoPilotService implements OnDestroy {
       }
     }
     this.explore(vessel, energy, scanned);
+  }
+
+  // ── Neural Network ────────────────────────────────────────────────────────
+  private tickNeuralNetwork(vessel: VesselConnection): void {
+    const state = vessel.state$.value!;
+    const { scanned, energy } = this.getContext(vessel);
+    
+    const enemies   = this.getEnemies(scanned);
+    const asteroids = scanned.filter(s => s.what === 'asteroid');
+    const torpedoes = scanned.filter(s => s.what === 'torpedo');
+    const resources = scanned.filter(s => s.what === 'resource');
+    
+    const inputs: number[] = [state.hp / 100.0, Math.random()];
+    const getPos = (arr: ScannedObject[]) => arr.length > 0 ? this.closest(arr).position : null;
+    
+    for (const arr of [enemies, asteroids, torpedoes, resources]) {
+      const p = getPos(arr);
+      if (p) {
+        inputs.push(p[0] / 50.0, p[1] / 50.0);
+      } else {
+        inputs.push(0.0, 0.0);
+      }
+    }
+
+    // Evaluate
+    const h = [];
+    const { W1, b1, W2, b2 } = BEST_MODEL_WEIGHTS as any;
+    for (let i = 0; i < W1.length; i++) {
+        let sum = b1[i];
+        for (let j = 0; j < inputs.length; j++) {
+            sum += W1[i][j] * inputs[j];
+        }
+        h.push(Math.max(0, sum));
+    }
+    const o = [];
+    for (let i = 0; i < W2.length; i++) {
+        let sum = b2[i];
+        for (let j = 0; j < h.length; j++) {
+            sum += W2[i][j] * h[j];
+        }
+        o.push(sum);
+    }
+    const action_idx = o.indexOf(Math.max(...o));
+
+    if (action_idx === 0) vessel.move(0, 1);
+    else if (action_idx === 1) vessel.move(0, -1);
+    else if (action_idx === 2) vessel.move(1, 0);
+    else if (action_idx === 3) vessel.move(-1, 0);
+    else if (action_idx === 4) {
+      const e = getPos(enemies);
+      if (e && energy >= 10) vessel.fireTorpedo(Math.sign(e[0]), Math.sign(e[1]));
+    }
+    else if (action_idx === 5) {
+      const e = getPos(enemies);
+      if (e && energy >= 50) vessel.fireLaser(Math.sign(e[0]), Math.sign(e[1]));
+    }
+    else if (action_idx === 6 && energy >= 10) vessel.dropMine(2.0);
+    else if (action_idx === 7 && energy >= 5) vessel.scanRadar();
   }
 
   // ── Déplacement sécurisé : évite les cases dangereuses ───────────────────
