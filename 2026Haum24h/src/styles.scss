@@ -48,7 +48,7 @@ body {
   background: var(--bg-main);
   color: var(--text-main);
   font-family: 'Courier New', monospace;
-  overflow: hidden;
+  overflow: auto;
   transition: all 0.3s ease;
   min-height: 100vh;
 

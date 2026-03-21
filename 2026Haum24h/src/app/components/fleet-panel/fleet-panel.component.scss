@@ -45,7 +45,7 @@
   .vessel-id {
     font-size: 10px;
     color: var(--text-dim);
-    overflow: hidden;
+    overflow: auto;
     text-overflow: ellipsis;
     white-space: nowrap;
     flex: 1;

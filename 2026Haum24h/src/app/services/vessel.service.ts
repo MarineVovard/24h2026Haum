@@ -8,6 +8,7 @@ export class VesselConnection {
   state$ = new BehaviorSubject<VesselState | null>(null);
   messages$ = new Subject<InMessage>();
   wsStatus$ = new BehaviorSubject<'connecting' | 'open' | 'closed'>('connecting');
+  heartbeatInterval:any;
 
   private energyInterval: any;
   private vesselId = '';
@@ -39,6 +40,11 @@ export class VesselConnection {
     this.socket.onopen = () => {
       this.wsStatus$.next('open');
       this.send({ type: 'connect', id: this.vesselId, ...(this.needKeys && this.key ? { key: this.key } : {}) });
+      
+      // ❤️ heartbeat toutes les 20s
+      this.heartbeatInterval = setInterval(() => {
+      this.send({ type: 'ping' });
+      }, 10000);
     };
 
     this.socket.onmessage = (ev) => {
@@ -69,7 +75,7 @@ export class VesselConnection {
         this.energyInterval = setInterval(() => {
           const s = this.state$.value;
           if (s) this.state$.next({ ...s, energy: Math.min(100, s.energy + 4) });
-        }, 1000);
+        }, 5000);
         break;
 
       case 'start_battle':
@@ -116,6 +122,7 @@ export class VesselConnection {
 
       case 'passive_scan': {
         if (!cur) break;
+        if(cur.id.split(":")[0] === msg.vessel?.split(':')[0]) break;
         const details = msg.what === 'move'
           ? `vaisseau ${(msg as any).vessel} s'est déplacé`
           : `explosion détectée`;
@@ -132,7 +139,7 @@ export class VesselConnection {
         break;
 
       case 'pong':
-        if (cur) this.state$.next({ ...cur, log: [`🏓 Pong (n=${(msg as any).n})`, ...cur.log] });
+        if (cur) this.state$.next({ ...cur });
         break;
     }
   }

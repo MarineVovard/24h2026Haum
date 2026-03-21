@@ -59,7 +59,7 @@ export class AppComponent implements OnInit {
     this.wsService.connect(cfg.serverUrl);
     setTimeout(() => {
       this.wsService.registerFleet(cfg.team, cfg.vessels, cfg.key || undefined);
-    }, 600);
+    }, 10000);
   }
 
   toggleDebug():    void { this.showDebug = !this.showDebug; }
