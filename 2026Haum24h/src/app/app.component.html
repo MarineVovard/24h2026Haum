@@ -5,11 +5,19 @@
     <div class="conn-status" [class.ok]="connected">
       {{ connected ? '🟢 Connecté' : '🔴 Déconnecté' }}
     </div>
-    <button class="debug-toggle" (click)="toggleDebug()">
-      {{ showDebug ? '🐛 Masquer debug' : '🐛 Debug' }}
-    </button>
+
     @if (battleReady) {
-      <button class="reset-btn" (click)="reset()">↩ Réinitialiser</button>
+      <button class="autopilot-btn" [class.active]="autoPilot" (click)="toggleAutoPilot()">
+        {{ autoPilot ? '🤖 Auto ON' : '🤖 Auto OFF' }}
+      </button>
+    }
+
+    <button class="debug-toggle" (click)="toggleDebug()">
+      {{ showDebug ? '🐛 Masquer' : '🐛 Debug' }}
+    </button>
+
+    @if (battleReady) {
+      <button class="reset-btn" (click)="reset()">↩ Reset</button>
     }
   </header>
 
@@ -37,12 +45,12 @@
   } @else {
     <div class="main">
       <app-fleet-panel
-        [vessels]="vesselService.getAll()"
+        [vessels]="vessels"
         [selected]="selectedVessel"
         (select)="selectVessel($event)">
       </app-fleet-panel>
 
-      <app-grid [vessel]="selectedVessel"></app-grid>
+      <app-grid [vessel]="selectedVessel" [autoPilot]="autoPilot"></app-grid>
 
       <app-event-log [vessel]="selectedVessel"></app-event-log>
     </div>

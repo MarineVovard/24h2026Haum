@@ -1,6 +1,7 @@
 import { Component, Input, Output, EventEmitter } from '@angular/core';
 import { CommonModule, AsyncPipe, DecimalPipe } from '@angular/common';
 import { VesselConnection } from '../../services/vessel.service';
+import { VesselRole, ROLES } from '../../models/protocol.models';
 
 @Component({
   selector: 'app-fleet-panel',
@@ -21,7 +22,16 @@ export class FleetPanelComponent {
     return parts.length >= 2 ? `${parts[0]} #${parts[1]}` : id;
   }
 
+  roleEmoji(role: VesselRole): string {
+    return ROLES.find(r => r.id === role)?.emoji ?? '🚀';
+  }
+
   hpPercent(hp: number, maxHp: number): number {
     return maxHp > 0 ? (hp / maxHp) * 100 : 0;
+  }
+
+  reconnect(event: MouseEvent, v: VesselConnection): void {
+    event.stopPropagation(); // ne pas déclencher le select
+    v.reconnect();
   }
 }
