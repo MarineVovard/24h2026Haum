@@ -2,9 +2,10 @@
   display: flex;
   flex-direction: column;
   height: 100vh;
-  background: #060612;
-  color: #e0e0ff;
+  background: var(--bg-main);
+  color: var(--text-main);
   font-family: 'Courier New', monospace;
+  transition: all 0.3s ease;
 }
 
 header {
@@ -12,42 +13,47 @@ header {
   align-items: center;
   gap: 16px;
   padding: 10px 20px;
-  background: #0a0a1f;
-  border-bottom: 1px solid #1e1e4a;
+  background: var(--bg-header);
+  border-bottom: 1px solid var(--border-main);
   flex-shrink: 0;
+  transition: all 0.3s ease;
 
   .title {
     font-size: 16px;
     font-weight: bold;
-    color: #7eb8ff;
+    color: var(--text-accent);
     letter-spacing: 3px;
   }
 
   .subtitle {
     font-size: 10px;
-    color: #333;
+    color: var(--text-sub);
     flex: 1;
   }
 
   .conn-status {
     font-size: 11px;
-    color: #444;
-    &.ok { color: #4caf50; }
+    color: var(--text-muted);
+
+    &.ok {
+      color: #4caf50;
+    }
   }
 
   .reset-btn {
     padding: 5px 12px;
     background: none;
-    border: 1px solid #333;
-    color: #666;
+    border: 1px solid var(--border-dim);
+    color: var(--text-dim);
     border-radius: 5px;
     cursor: pointer;
     font-family: 'Courier New', monospace;
     font-size: 11px;
+    transition: all 0.2s ease;
 
     &:hover {
-      border-color: #7eb8ff;
-      color: #7eb8ff;
+      border-color: var(--text-accent);
+      color: var(--text-accent);
     }
   }
 }
@@ -60,31 +66,47 @@ header {
 
 .debug-toggle {
   padding: 4px 10px;
-  background: #1a1a0a;
-  border: 1px solid #444;
-  color: #888;
+  background: var(--debug-bg);
+  border: 1px solid var(--border-dim);
+  color: var(--text-dim);
   border-radius: 5px;
   cursor: pointer;
   font-family: 'Courier New', monospace;
   font-size: 11px;
-  &:hover { border-color: #ff0; color: #ff0; }
+  transition: all 0.2s ease;
+
+  &:hover {
+    border-color: #ff0;
+    color: #ff0;
+
+    @media (prefers-color-scheme: light) {
+      border-color: #d1b100;
+      color: #d1b100;
+    }
+  }
 }
 
 .debug-panel {
-  background: #050508;
-  border-bottom: 1px solid #1e1e4a;
+  background: var(--bg-panel);
+  border-bottom: 2px solid var(--border-main);
   padding: 8px 16px;
   max-height: 200px;
   display: flex;
   flex-direction: column;
   gap: 6px;
   flex-shrink: 0;
+  transition: all 0.3s ease;
+  box-shadow: var(--shadow-sm);
 
   .debug-title {
     font-size: 10px;
-    color: #ff0;
+    color: #475569;
     text-transform: uppercase;
-    letter-spacing: 1px;
+    letter-spacing: 1.5px;
+    font-weight: bold;
+    @media (prefers-color-scheme: dark) {
+      color: #ff0;
+    }
   }
 
   .debug-logs {
@@ -96,18 +118,18 @@ header {
 
   .debug-entry {
     font-size: 11px;
-    color: #555;
+    color: var(--text-dim);
     font-family: 'Courier New', monospace;
     white-space: pre-wrap;
     word-break: break-all;
-    &.sent { color: #4caf50; }
-    &.recv { color: #7eb8ff; }
-    &.err  { color: #f44336; }
+    &.sent { color: #059669; font-weight: bold; }
+    &.recv { color: #2563eb; font-weight: bold; }
+    &.err  { color: #dc2626; font-weight: bold; }
   }
 
   .debug-empty {
     font-size: 11px;
-    color: #333;
+    color: var(--text-sub);
     font-style: italic;
   }
 }
