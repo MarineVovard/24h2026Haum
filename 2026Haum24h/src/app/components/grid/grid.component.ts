@@ -1,5 +1,6 @@
 import { Component, Input, OnChanges, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { SmartNavigation } from '../../services/smart-navigation';
 import { FormsModule } from '@angular/forms';
 import { Subscription } from 'rxjs';
 import { VesselConnection } from '../../services/vessel.service';
@@ -83,6 +84,40 @@ export class GridComponent implements OnChanges, OnDestroy {
   scan(): void  { this.vessel?.scanRadar(); }
   mine(): void  { this.vessel?.dropMine(3.0); }
   ping(): void  { this.vessel?.ping(); }
+
+  async magicAutoFarm(): Promise<void> {
+    if (!this.vessel) return;
+
+    // Lance le scan et attend les résultats
+    const context = await this.vessel.scanAndGetNavigationContext(300);
+    if (!context || context.resources.length === 0) return;
+
+    // Sélectionne la ressource la plus proche
+    let bestTarget = context.resources[0];
+    let minDist = Infinity;
+    for (const r of context.resources) {
+      const d = SmartNavigation.distance(context.currentPos, r);
+      if (d < minDist) { minDist = d; bestTarget = r; }
+    }
+
+    const allObstacles = [...context.obstacles, ...context.enemyVessels];
+
+    // L'algo calcule le move
+    const [dx, dy] = SmartNavigation.getNextMoveGreedy(
+      context.currentPos,
+      bestTarget,
+      allObstacles,
+      5, // maxSpeed
+      2  // Radius 
+    );
+
+    const idx = Math.round(dx);
+    const idy = Math.round(dy);
+
+    if (idx !== 0 || idy !== 0) {
+      this.vessel.move(idx, idy);
+    }
+  }
 
   autodestruct(): void {
     if (confirm('Confirmer l\'autodestruction ? (20 dégâts en zone)'))

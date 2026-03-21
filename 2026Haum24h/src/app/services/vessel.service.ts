@@ -156,6 +156,52 @@ export class VesselConnection {
   ping()                              {                this.send({ type: 'ping', n: Date.now() }); }
   autodestruct()                      {                this.send({ type: 'autodestruction' }); }
 
+  /**
+   * Lance un scan radar, attend quelques ms (réponses du serveur),
+   * et renvoie le contexte trié (position, cibles, obstacles).
+   * Idéal pour nourrir automatiquement SmartNavigation !
+   */
+  async scanAndGetNavigationContext(waitMs: number = 300) {
+    this.scanRadar();
+    // Attend la réception des messages `active_scan` via le WebSocket
+    await new Promise(resolve => setTimeout(resolve, waitMs));
+    return this.getNavigationContext();
+  }
+
+  /**
+   * Extrait et trie les informations du vaisseau dans ses attributs (State).
+   */
+  getNavigationContext() {
+    const s = this.state$.value;
+    if (!s) return null;
+
+    // TOUT est relatif, la position du vaisseau est donc le point zéro local [0, 0].
+    const currentPos: [number, number] = [0, 0];
+
+    const now = Date.now();
+    const validScans = s.scanned.filter(obj => obj.ts > now);
+
+    // Mouvements ou présences de ressources
+    const resources = validScans
+      .filter(o => o.what === 'resource')
+      .map(o => o.position as [number, number]);
+
+    // On récupère "vessel" (vaisseau fixe) ou "move" (mouvement détecté) 
+    const enemyVessels = validScans
+      .filter(o => o.what === 'vessel' || o.what === 'move')
+      .map(o => o.position as [number, number]);
+
+    // Les obstacles "solides" (mines, astéroïdes, torpilles...)
+    const obstacles = validScans
+      .filter(o => ['asteroid', 'mine', 'torpedo'].includes(o.what))
+      .map(o => o.position as [number, number]);
+
+    return {
+      currentPos,
+      resources,
+      enemyVessels,
+      obstacles
+    };
   private clearActiveScans(): void {
     const s = this.state$.value;
     if (s) this.state$.next({ ...s, scanned: [] });
