@@ -221,3 +221,33 @@
     &:hover:not(:disabled) { background: rgba(76, 175, 80, 0.25); transform: none; }
   }
 }
+
+.role-select {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  flex: 1;
+}
+
+.role-btn {
+  padding: 4px 8px;
+  background: #0a0a1f;
+  border: 1px solid #1e1e4a;
+  color: #666;
+  border-radius: 5px;
+  cursor: pointer;
+  font-family: 'Courier New', monospace;
+  font-size: 10px;
+  white-space: nowrap;
+  transition: all 0.15s;
+
+  &:hover  { border-color: #7eb8ff; color: #aaa; }
+  &.active { background: #1a1a3a; border-color: #7eb8ff; color: #7eb8ff; }
+}
+
+.role-desc {
+  font-size: 10px;
+  color: #555;
+  padding: 4px 14px 8px;
+  font-style: italic;
+}
