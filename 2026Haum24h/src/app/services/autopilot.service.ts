@@ -2,7 +2,6 @@ import { Injectable, OnDestroy } from '@angular/core';
 import { BehaviorSubject, Subscription } from 'rxjs';
 import { VesselService, VesselConnection } from './vessel.service';
 import { ScannedObject, VesselRole } from '../models/protocol.models';
-import { SmartNavigation, Point2D } from './smart-navigation';
 
 const TICK_MS = 1500;
 
@@ -78,11 +77,10 @@ export class AutoPilotService implements OnDestroy {
       this.friendlyIds.add(shortId);
 
       switch (state.role) {
-        case 'fighter':          this.tickFighter(vessel);          break;
-        case 'survivor':         this.tickSurvivor(vessel);         break;
-        case 'miner':            this.tickMiner(vessel);            break;
-        case 'collector':        this.tickCollector(vessel);        break;
-        case 'smart_aggressive': this.tickSmartAggressive(vessel);  break;
+        case 'fighter':   this.tickFighter(vessel);   break;
+        case 'survivor':  this.tickSurvivor(vessel);  break;
+        case 'miner':     this.tickMiner(vessel);     break;
+        case 'collector': this.tickCollector(vessel); break;
       }
     });
   }
@@ -185,113 +183,78 @@ export class AutoPilotService implements OnDestroy {
     this.explore(vessel, energy, scanned);
   }
 
-  // ── Chasseur intelligent : smart move + agressif ──────────────────────────────
-  private tickSmartAggressive(vessel: VesselConnection): void {
-    const { scanned, energy } = this.getContext(vessel);
+  // ── Déplacement sécurisé : évite les cases dangereuses ───────────────────
+  // Respecte la stat S (vitesse) du vaisseau et vérifie que la case d'arrivée est libre
+  private moveSafe(vessel: VesselConnection, target: ScannedObject, scanned: ScannedObject[]): void {
+    const state   = vessel.state$.value!;
+    const maxDist = state.stats[2] ?? 1; // stat S = index 2
 
-    // Obstacles solides à éviter (mines, astéroïdes, torpilles)
-    const obstacles: Point2D[] = scanned
-      .filter(s => ['asteroid', 'mine', 'torpedo'].includes(s.what as string))
-      .map(s => s.position as Point2D);
+    // Vecteur vers la cible
+    const tx = target.position[0];
+    const ty = target.position[1];
+    const dist = Math.sqrt(tx * tx + ty * ty);
 
-    const enemies  = scanned.filter(s => s.what === 'vessel' || s.what === 'move');
-    const origin: Point2D = [0, 0];
+    // Normaliser et limiter à maxDist (norme euclidienne ≤ S)
+    const scale  = Math.min(1, maxDist / (dist || 1));
+    const baseDx = Math.round(tx * scale);
+    const baseDy = Math.round(ty * scale);
 
-    // — ATTAQUE en priorité si un ennemi est visible ——————————————————————
-    if (enemies.length > 0 && energy >= 10) {
-      const target = this.closest(enemies);
-      const [tx, ty] = target.position;
-      const sdx = Math.sign(tx);
-      const sdy = Math.sign(ty);
+    // Candidats triés par proximité avec la direction idéale
+    const candidates = this.generateCandidates(baseDx, baseDy, maxDist);
 
-      // Laser si énergie suffisante et ennemi aligné (ligne droite : horizontal/vertical/diagonal)
-      const aligned = tx === 0 || ty === 0 || Math.abs(tx) === Math.abs(ty);
-      if (energy >= 50 && aligned) {
-        vessel.fireLaser(sdx || 1, sdy || 1);
+    for (const [cx, cy] of candidates) {
+      if (!this.isDangerous([cx, cy], scanned) && !this.isOccupied([cx, cy], scanned)) {
+        vessel.move(cx, cy);
         return;
-      }
-
-      // IEM si ennemi très proche (distance de Manhattan <= 2) et énergie suffisante
-      const manhattan = Math.abs(tx) + Math.abs(ty);
-      if (energy >= 30 && manhattan <= 2) {
-        vessel.fireIem(sdx || 1, sdy || 1);
-        return;
-      }
-
-      // Torpille sinon
-      if (energy >= 10) {
-        vessel.fireTorpedo(sdx || 1, sdy || 1);
       }
     }
 
-    // — MOUVEMENT INTELLIGENT vers l'ennemi le plus proche (ou exploration) —
-    if (energy >= 5) {
-      // Vitesse maximale basée sur les stats du vaisseau (stats[0]) ou 5 par défaut
-      const state = vessel.state$.value!;
-      const maxSpeed = state.stats?.[0] ?? 5;
-
-      let target: Point2D;
-      if (enemies.length > 0) {
-        target = this.closest(enemies).position as Point2D;
-      } else if (scanned.length === 0) {
-        // Rien de visible : scanner
-        vessel.scanRadar();
-        return;
-      } else {
-        // Explorer aléatoirement
-        const dirs: [number, number][] = [[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,1],[1,-1],[-1,-1]];
-        const [dx, dy] = dirs[Math.floor(Math.random() * dirs.length)];
-        vessel.move(dx * maxSpeed, dy * maxSpeed);
-        return;
-      }
-
-      // Calcul du meilleur mouvement avec SmartNavigation
-      const [dx, dy] = SmartNavigation.getNextMoveGreedy(
-        origin,
-        target,
-        obstacles,
-        maxSpeed,
-        /* obstacleRadius */ 4.0,
-        /* numAngles */ 32
-      );
-
-      if (dx !== 0 || dy !== 0) {
-        vessel.move(dx, dy);
-      }
-    }
+    // Aucune case sûre accessible : scanner
+    vessel.scanRadar();
   }
 
-  // ── Helpers ───────────────────────────────────────────────────────────────
+  // Génère les vecteurs candidats autour de la direction idéale, dans la limite de maxDist
+  private generateCandidates(dx: number, dy: number, maxDist: number): [number, number][] {
+    const candidates: [number, number][] = [];
 
-  // ── Déplacement sécurisé : évite les cases dangereuses ───────────────────
-  private moveSafe(vessel: VesselConnection, target: ScannedObject, scanned: ScannedObject[]): void {
-    const dx = Math.sign(target.position[0]);
-    const dy = Math.sign(target.position[1]);
-
-
-    // Essayer la direction directe d'abord
-    if (!this.isDangerous([dx, dy], scanned)) {
-      vessel.move(dx, dy);
-      return;
-    }
-
-    // Essayer des directions alternatives (contournement)
-    const alternatives: [number, number][] = [
-      [dx, 0], [0, dy],           // axes séparés
-      [dx, -dy], [-dx, dy],       // diagonales alternatives
-      [-dx, 0], [0, -dy],         // opposés partiels
-      [-dx, -dy]                  // demi-tour complet
-    ];
-
-    for (const [ax, ay] of alternatives) {
-      if ((ax !== 0 || ay !== 0) && !this.isDangerous([ax, ay], scanned)) {
-        vessel.move(ax, ay);
-        return;
+    for (let x = -maxDist; x <= maxDist; x++) {
+      for (let y = -maxDist; y <= maxDist; y++) {
+        if (x === 0 && y === 0) continue;
+        if (Math.sqrt(x * x + y * y) > maxDist) continue;
+        candidates.push([x, y]);
       }
     }
 
-    // Aucune direction sûre : rester sur place (scan)
-    vessel.scanRadar();
+    // Trier par angle proche de la direction cible, puis par distance croissante
+    const targetAngle = Math.atan2(dy, dx);
+    candidates.sort((a, b) => {
+      const angleA = Math.atan2(a[1], a[0]);
+      const angleB = Math.atan2(b[1], b[0]);
+      const diffA  = Math.abs(this.angleDiff(angleA, targetAngle));
+      const diffB  = Math.abs(this.angleDiff(angleB, targetAngle));
+      if (Math.abs(diffA - diffB) > 0.1) return diffA - diffB;
+      // À angle égal, préférer les cases les plus proches de la cible
+      const distA = Math.abs(a[0] - dx) + Math.abs(a[1] - dy);
+      const distB = Math.abs(b[0] - dx) + Math.abs(b[1] - dy);
+      return distA - distB;
+    });
+
+    return candidates;
+  }
+
+  private angleDiff(a: number, b: number): number {
+    let d = a - b;
+    while (d >  Math.PI) d -= 2 * Math.PI;
+    while (d < -Math.PI) d += 2 * Math.PI;
+    return d;
+  }
+
+  // Vérifie si une case est occupée par un objet solide (astéroïde, mine)
+  private isOccupied(dir: number[], scanned: ScannedObject[]): boolean {
+    return scanned.some(s =>
+      s.position[0] === dir[0] && s.position[1] === dir[1] &&
+      ['asteroid', 'mine'].includes(s.what as string)
+    );
   }
 
   // Vérifie si une direction mène vers un objet dangereux à 1-2 cases
@@ -316,7 +279,7 @@ export class AutoPilotService implements OnDestroy {
     if (this.isFriendlyPosition(enemy.position, vessel)) return;
 
     const [dx, dy] = enemy.position;
-    if (energy >= 50 && (dx === 0 || dy === 0)) {
+    if (energy >= 50) {
       vessel.fireLaser(Math.sign(dx), Math.sign(dy));
     } else if (energy >= 10) {
       vessel.fireTorpedo(Math.sign(dx), Math.sign(dy));
