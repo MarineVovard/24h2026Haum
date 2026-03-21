@@ -2,6 +2,7 @@ import { Injectable, OnDestroy } from '@angular/core';
 import { BehaviorSubject, Subscription } from 'rxjs';
 import { VesselService, VesselConnection } from './vessel.service';
 import { ScannedObject, VesselRole } from '../models/protocol.models';
+import { SmartNavigation, Point2D } from './smart-navigation';
 
 const TICK_MS = 1500;
 
@@ -48,10 +49,11 @@ export class AutoPilotService implements OnDestroy {
       if (!state || !state.battleStarted || state.frozen) return;
 
       switch (state.role) {
-        case 'fighter':   this.tickFighter(vessel);   break;
-        case 'survivor':  this.tickSurvivor(vessel);  break;
-        case 'miner':     this.tickMiner(vessel);     break;
-        case 'collector': this.tickCollector(vessel); break;
+        case 'fighter':          this.tickFighter(vessel);          break;
+        case 'survivor':         this.tickSurvivor(vessel);         break;
+        case 'miner':            this.tickMiner(vessel);            break;
+        case 'collector':        this.tickCollector(vessel);        break;
+        case 'smart_aggressive': this.tickSmartAggressive(vessel);  break;
       }
     });
   }
@@ -156,6 +158,82 @@ export class AutoPilotService implements OnDestroy {
     }
 
     this.explore(vessel, energy);
+  }
+
+  // ── Chasseur intelligent : smart move + agressif ──────────────────────────────
+  private tickSmartAggressive(vessel: VesselConnection): void {
+    const { scanned, energy } = this.getContext(vessel);
+
+    // Obstacles solides à éviter (mines, astéroïdes, torpilles)
+    const obstacles: Point2D[] = scanned
+      .filter(s => ['asteroid', 'mine', 'torpedo'].includes(s.what as string))
+      .map(s => s.position as Point2D);
+
+    const enemies  = scanned.filter(s => s.what === 'vessel' || s.what === 'move');
+    const origin: Point2D = [0, 0];
+
+    // — ATTAQUE en priorité si un ennemi est visible ——————————————————————
+    if (enemies.length > 0 && energy >= 10) {
+      const target = this.closest(enemies);
+      const [tx, ty] = target.position;
+      const sdx = Math.sign(tx);
+      const sdy = Math.sign(ty);
+
+      // Laser si énergie suffisante et ennemi aligné (ligne droite : horizontal/vertical/diagonal)
+      const aligned = tx === 0 || ty === 0 || Math.abs(tx) === Math.abs(ty);
+      if (energy >= 50 && aligned) {
+        vessel.fireLaser(sdx || 1, sdy || 1);
+        return;
+      }
+
+      // IEM si ennemi très proche (distance de Manhattan <= 2) et énergie suffisante
+      const manhattan = Math.abs(tx) + Math.abs(ty);
+      if (energy >= 30 && manhattan <= 2) {
+        vessel.fireIem(sdx || 1, sdy || 1);
+        return;
+      }
+
+      // Torpille sinon
+      if (energy >= 10) {
+        vessel.fireTorpedo(sdx || 1, sdy || 1);
+      }
+    }
+
+    // — MOUVEMENT INTELLIGENT vers l'ennemi le plus proche (ou exploration) —
+    if (energy >= 5) {
+      // Vitesse maximale basée sur les stats du vaisseau (stats[0]) ou 5 par défaut
+      const state = vessel.state$.value!;
+      const maxSpeed = state.stats?.[0] ?? 5;
+
+      let target: Point2D;
+      if (enemies.length > 0) {
+        target = this.closest(enemies).position as Point2D;
+      } else if (scanned.length === 0) {
+        // Rien de visible : scanner
+        vessel.scanRadar();
+        return;
+      } else {
+        // Explorer aléatoirement
+        const dirs: [number, number][] = [[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,1],[1,-1],[-1,-1]];
+        const [dx, dy] = dirs[Math.floor(Math.random() * dirs.length)];
+        vessel.move(dx * maxSpeed, dy * maxSpeed);
+        return;
+      }
+
+      // Calcul du meilleur mouvement avec SmartNavigation
+      const [dx, dy] = SmartNavigation.getNextMoveGreedy(
+        origin,
+        target,
+        obstacles,
+        maxSpeed,
+        /* obstacleRadius */ 4.0,
+        /* numAngles */ 32
+      );
+
+      if (dx !== 0 || dy !== 0) {
+        vessel.move(dx, dy);
+      }
+    }
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────

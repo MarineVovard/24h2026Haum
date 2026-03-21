@@ -5,21 +5,21 @@ import { InMessage, OutMessage, VesselState, ScannedObject, VesselRole } from '.
 export class VesselConnection {
 
   private socket!: WebSocket;
-  state$    = new BehaviorSubject<VesselState | null>(null);
+  state$ = new BehaviorSubject<VesselState | null>(null);
   messages$ = new Subject<InMessage>();
   wsStatus$ = new BehaviorSubject<'connecting' | 'open' | 'closed'>('connecting');
 
   private energyInterval: any;
   private vesselId = '';
   private needKeys = false;
-  private key      = '';
+  private key = '';
 
-  constructor(private serverUrl: string, public role: VesselRole) {}
+  constructor(private serverUrl: string, public role: VesselRole) { }
 
   connect(id: string, needKeys: boolean, key?: string): void {
     this.vesselId = id;
     this.needKeys = needKeys;
-    this.key      = key ?? '';
+    this.key = key ?? '';
     this.openSocket();
   }
 
@@ -149,12 +149,12 @@ export class VesselConnection {
   }
 
   fireTorpedo(dx: number, dy: number) { this.cost(10); this.send({ type: 'fire_torpedo', direction: [dx, dy] }); }
-  dropMine(delay = 3.0)               { this.cost(10); this.send({ type: 'drop_mine',    delay }); }
-  fireLaser(dx: number, dy: number)   { this.cost(50); this.send({ type: 'fire_laser',   direction: [dx, dy] }); }
-  fireIem(dx: number, dy: number)     { this.cost(30); this.send({ type: 'fire_iem',     direction: [dx, dy] }); }
-  scanRadar()                         { this.cost(5);  this.send({ type: 'scan_radar' }); }
-  ping()                              {                this.send({ type: 'ping', n: Date.now() }); }
-  autodestruct()                      {                this.send({ type: 'autodestruction' }); }
+  dropMine(delay = 3.0) { this.cost(10); this.send({ type: 'drop_mine', delay }); }
+  fireLaser(dx: number, dy: number) { this.cost(50); this.send({ type: 'fire_laser', direction: [dx, dy] }); }
+  fireIem(dx: number, dy: number) { this.cost(30); this.send({ type: 'fire_iem', direction: [dx, dy] }); }
+  scanRadar() { this.cost(5); this.send({ type: 'scan_radar' }); }
+  ping() { this.send({ type: 'ping', n: Date.now() }); }
+  autodestruct() { this.send({ type: 'autodestruction' }); }
 
   /**
    * Lance un scan radar, attend quelques ms (réponses du serveur),
@@ -202,6 +202,7 @@ export class VesselConnection {
       enemyVessels,
       obstacles
     };
+  }
   private clearActiveScans(): void {
     const s = this.state$.value;
     if (s) this.state$.next({ ...s, scanned: [] });
