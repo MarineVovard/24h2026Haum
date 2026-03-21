@@ -1,42 +1,70 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Subject } from 'rxjs';
-import { InMessage, OutMessage, VesselState, ScannedObject } from '../models/protocol.models';
+import { InMessage, OutMessage, VesselState, ScannedObject, VesselRole } from '../models/protocol.models';
 
 export class VesselConnection {
 
   private socket!: WebSocket;
   state$    = new BehaviorSubject<VesselState | null>(null);
   messages$ = new Subject<InMessage>();
+  wsStatus$ = new BehaviorSubject<'connecting' | 'open' | 'closed'>('connecting');
 
   private energyInterval: any;
+  private vesselId = '';
+  private needKeys = false;
+  private key      = '';
 
-  constructor(private serverUrl: string) {}
+  constructor(private serverUrl: string, public role: VesselRole) {}
 
   connect(id: string, needKeys: boolean, key?: string): void {
+    this.vesselId = id;
+    this.needKeys = needKeys;
+    this.key      = key ?? '';
+    this.openSocket();
+  }
+
+  reconnect(): void {
+    this.socket?.close();
+    clearInterval(this.energyInterval);
+    this.wsStatus$.next('connecting');
+    const s = this.state$.value;
+    if (s) this.state$.next({ ...s, log: ['🔄 Reconnexion...', ...s.log] });
+    this.openSocket();
+  }
+
+  private openSocket(): void {
     this.socket = new WebSocket(`${this.serverUrl}/ws`);
+    this.wsStatus$.next('connecting');
 
     this.socket.onopen = () => {
-      this.send({ type: 'connect', id, ...(needKeys && key ? { key } : {}) });
+      this.wsStatus$.next('open');
+      this.send({ type: 'connect', id: this.vesselId, ...(this.needKeys && this.key ? { key: this.key } : {}) });
     };
 
     this.socket.onmessage = (ev) => {
       const msg: InMessage = JSON.parse(ev.data);
       this.messages$.next(msg);
-      this.handleMessage(msg, id);
+      this.handleMessage(msg, this.vesselId);
     };
 
-    this.socket.onclose = () => clearInterval(this.energyInterval);
+    this.socket.onclose = () => {
+      this.wsStatus$.next('closed');
+      clearInterval(this.energyInterval);
+      const s = this.state$.value;
+      if (s) this.state$.next({ ...s, log: ['🔌 Connexion fermée', ...s.log] });
+    };
   }
 
   private handleMessage(msg: InMessage, id: string): void {
     const cur = this.state$.value;
+    console.log(msg);
 
     switch (msg.type) {
       case 'stats':
         this.state$.next({
           id, stats: msg.stats, hp: msg.hp, maxHp: msg.hp,
           energy: 100, frozen: false, battleStarted: false,
-          scanned: [], log: ['Connecté ✅']
+          scanned: [], log: ['Connecté ✅'], role: this.role
         });
         this.energyInterval = setInterval(() => {
           const s = this.state$.value;
@@ -78,7 +106,7 @@ export class VesselConnection {
 
       case 'active_scan': {
         if (!cur) break;
-        const obj: ScannedObject = { what: msg.what, position: msg.position, ts: Date.now() + 8000 };
+        const obj: ScannedObject = { what: msg.what, position: msg.position, ts: Date.now() + 8000, isActive: true };
         const filtered = cur.scanned.filter(s =>
           !(s.position[0] === obj.position[0] && s.position[1] === obj.position[1])
         );
@@ -88,9 +116,10 @@ export class VesselConnection {
 
       case 'passive_scan': {
         if (!cur) break;
-        const pos = (msg as any).position ?? (msg as any).movement ?? [0, 0];
-        const obj: ScannedObject = { what: msg.what, position: pos, ts: Date.now() + 8000 };
-        this.state$.next({ ...cur, scanned: [...cur.scanned, obj], log: [`👁 Scan passif: ${msg.what}`, ...cur.log] });
+        const details = msg.what === 'move'
+          ? `vaisseau ${(msg as any).vessel} s'est déplacé`
+          : `explosion détectée`;
+        this.state$.next({ ...cur, log: [`👁 Scan passif: ${details}`, ...cur.log] });
         break;
       }
 
@@ -113,7 +142,12 @@ export class VesselConnection {
       this.socket.send(JSON.stringify(msg));
   }
 
-  move(dx: number, dy: number)        { this.cost(5);  this.send({ type: 'move',         direction: [dx, dy] }); }
+  move(dx: number, dy: number): void {
+    this.cost(5);
+    this.send({ type: 'move', direction: [dx, dy] });
+    this.clearActiveScans();
+  }
+
   fireTorpedo(dx: number, dy: number) { this.cost(10); this.send({ type: 'fire_torpedo', direction: [dx, dy] }); }
   dropMine(delay = 3.0)               { this.cost(10); this.send({ type: 'drop_mine',    delay }); }
   fireLaser(dx: number, dy: number)   { this.cost(50); this.send({ type: 'fire_laser',   direction: [dx, dy] }); }
@@ -168,6 +202,9 @@ export class VesselConnection {
       enemyVessels,
       obstacles
     };
+  private clearActiveScans(): void {
+    const s = this.state$.value;
+    if (s) this.state$.next({ ...s, scanned: [] });
   }
 
   private cost(c: number): void {
@@ -178,15 +215,20 @@ export class VesselConnection {
 
 @Injectable({ providedIn: 'root' })
 export class VesselService {
-  connections = new Map<string, VesselConnection>();
+  private connections = new Map<string, VesselConnection>();
+  vessels$ = new BehaviorSubject<VesselConnection[]>([]);
 
-  createAll(ids: string[], serverUrl: string, needKeys: boolean, key?: string): void {
+  createAll(ids: string[], roles: VesselRole[], serverUrl: string, needKeys: boolean, key?: string): void {
     this.connections.clear();
-    ids.forEach(id => {
-      const conn = new VesselConnection(serverUrl);
+    const conns: VesselConnection[] = [];
+    ids.forEach((id, i) => {
+      const role = roles[i] ?? 'fighter';
+      const conn = new VesselConnection(serverUrl, role);
       conn.connect(id, needKeys, key);
       this.connections.set(id, conn);
+      conns.push(conn);
     });
+    this.vessels$.next(conns);
   }
 
   get(id: string): VesselConnection | undefined {

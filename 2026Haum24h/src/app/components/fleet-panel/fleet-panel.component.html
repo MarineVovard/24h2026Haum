@@ -6,9 +6,23 @@
       <div class="vessel-card" [class.selected]="v === selected" (click)="select.emit(v)">
 
         <div class="vessel-header">
+          <span class="role-badge" [title]="s.role">{{ roleEmoji(s.role) }}</span>
           <span class="vessel-id">{{ shortId(s.id) }}</span>
           @if (s.frozen)         { <span class="badge frozen">🧊</span> }
           @if (!s.battleStarted) { <span class="badge lobby">⏳</span> }
+
+          @if (v.wsStatus$ | async; as status) {
+            <span class="ws-status"
+                  [class.open]="status === 'open'"
+                  [class.closed]="status === 'closed'"
+                  [class.connecting]="status === 'connecting'"
+                  [title]="status">
+              {{ status === 'open' ? '🟢' : status === 'connecting' ? '🟡' : '🔴' }}
+            </span>
+            @if (status === 'closed') {
+              <button class="reconnect-btn" (click)="reconnect($event, v)" title="Reconnecter">↩</button>
+            }
+          }
         </div>
 
         <div class="bar-row">

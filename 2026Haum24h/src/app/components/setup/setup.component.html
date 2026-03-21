@@ -21,17 +21,36 @@
     @for (v of vessels; track $index; let i = $index) {
       <div class="vessel-row">
         <span class="vessel-num">#{{ i + 1 }}</span>
+
+        <!-- Sélecteur de rôle -->
+        <div class="role-select">
+          @for (r of roles; track r.id) {
+            <button
+              class="role-btn"
+              [class.active]="v.role === r.id"
+              [title]="r.description"
+              (click)="v.role = r.id">
+              {{ r.emoji }} {{ r.label }}
+            </button>
+          }
+        </div>
+
+        <!-- Stats -->
         @for (stat of statNames; track stat; let j = $index) {
           <label class="stat-label">
             <span>{{ stat }}</span>
             <input type="number" min="0" max="9"
-              [(ngModel)]="vessels[i][j]"
+              [(ngModel)]="vessels[i].stats[j]"
               (ngModelChange)="clamp(i, j)">
           </label>
         }
+
         <span class="row-total" [class.over]="rowTotal(i) > 9">Σ {{ rowTotal(i) }}</span>
         <button class="rm-btn" (click)="removeVessel(i)" [disabled]="vessels.length <= 1">✕</button>
       </div>
+
+      <!-- Description du rôle sélectionné -->
+      <div class="role-desc">{{ roleInfo(v.role).emoji }} {{ roleInfo(v.role).description }}</div>
     }
   </div>
 
@@ -41,9 +60,7 @@
   </div>
 
   <div class="actions">
-    <button class="add-btn" (click)="addVessel()" [disabled]="vessels.length >= 6">
-      + Vaisseau
-    </button>
+    <button class="add-btn" (click)="addVessel()" [disabled]="vessels.length >= 6">+ Vaisseau</button>
     <button class="launch-btn" (click)="launch()" [disabled]="fleetTotal > 25 || !team || !serverUrl">
       ⚡ Lancer la flotte
     </button>

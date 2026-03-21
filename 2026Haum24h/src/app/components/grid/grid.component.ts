@@ -26,6 +26,7 @@ const DIRECTIONS: Record<string, [number, number]> = {
 export class GridComponent implements OnChanges, OnDestroy {
 
   @Input() vessel: VesselConnection | null = null;
+  @Input() autoPilot = false;
 
   state: VesselState | null = null;
   size      = 11;
