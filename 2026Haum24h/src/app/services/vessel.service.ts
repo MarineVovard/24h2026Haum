@@ -203,6 +203,7 @@ export class VesselConnection {
       obstacles
     };
   }
+
   private clearActiveScans(): void {
     const s = this.state$.value;
     if (s) this.state$.next({ ...s, scanned: [] });
