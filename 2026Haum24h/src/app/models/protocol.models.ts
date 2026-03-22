@@ -69,6 +69,7 @@ export interface VesselState {
   frozen: boolean;
   battleStarted: boolean;
   scanned: ScannedObject[];
+  scannedPassive: ScannedObject[];
   log: string[];
   role: VesselRole;
 }

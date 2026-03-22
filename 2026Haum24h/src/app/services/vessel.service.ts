@@ -63,31 +63,34 @@ export class VesselConnection {
 
   private handleMessage(msg: InMessage, id: string): void {
     const cur = this.state$.value;
-    console.log(msg);
 
     switch (msg.type) {
       case 'stats':
         this.state$.next({
           id, stats: msg.stats, hp: msg.hp, maxHp: msg.hp,
           energy: 100, frozen: false, battleStarted: false,
-          scanned: [], log: ['Connecté ✅'], role: this.role
+          scanned: [], scannedPassive: [], log: ['Connecté ✅'], role: this.role
         });
         this.energyInterval = setInterval(() => {
           const s = this.state$.value;
           if (s) this.state$.next({ ...s, energy: Math.min(100, s.energy + 4) });
         }, 5000);
+        console.log(msg);
         break;
 
       case 'start_battle':
         if (cur) this.state$.next({ ...cur, battleStarted: true, log: ['⚔️ Bataille démarrée !', ...cur.log] });
+        console.log(msg);
         break;
 
       case 'damage':
         if (cur) this.state$.next({ ...cur, hp: msg.hp, log: [`💥 Dégâts ! HP: ${msg.hp}`, ...cur.log] });
+        console.log(msg);
         break;
 
       case 'low_energy':
         if (cur) this.state$.next({ ...cur, log: ['⚡ Énergie insuffisante', ...cur.log] });
+        console.log(msg);
         break;
 
       case 'iem_damage':
@@ -96,14 +99,17 @@ export class VesselConnection {
           const s = this.state$.value;
           if (s) this.state$.next({ ...s, frozen: false });
         }, 5000);
+        console.log(msg);
         break;
 
       case 'iem_frozen':
         if (cur) this.state$.next({ ...cur, log: ['🧊 Action bloquée — gelé par IEM', ...cur.log] });
+        console.log(msg);
         break;
 
       case 'move_aborded':
         if (cur) this.state$.next({ ...cur, log: ['⚠️ Déplacement annulé (trop loin)', ...cur.log] });
+        console.log(msg);
         break;
 
       case 'resource_depleted':
@@ -122,11 +128,24 @@ export class VesselConnection {
 
       case 'passive_scan': {
         if (!cur) break;
-        if(cur.id.split(":")[0] === msg.vessel?.split(':')[0]) break;
+        if(cur.id.split(":")[0] === msg.vessel?.split(':')[0]) {
+          this.state$.next({ ...cur, log: [`👁 Scan passif: mon bateau move !!!`, ...cur.log] });
+          break;
+        }
         const details = msg.what === 'move'
           ? `vaisseau ${(msg as any).vessel} s'est déplacé`
           : `explosion détectée`;
+        if(msg.what === 'move') {
+          console.log("On est dans le move");
+          const obj: ScannedObject = { what: msg.what, position: msg.position ?? [], ts: Date.now() + 1000, isActive: false }; 
+          // [TODO]: il faut adapter le temps à la longueur du trajet
+          const filtered: ScannedObject[] = cur.scannedPassive.filter(s => s.ts >= Date.now()); // on enlève les infos qui ne sont plus à jour
+          console.log([...filtered, obj]);
+          this.state$.next({ ...cur, scannedPassive: [...filtered, obj] , log: [`👁 Scan passif: ${details}`, ...cur.log] });
+        }
+        else {
         this.state$.next({ ...cur, log: [`👁 Scan passif: ${details}`, ...cur.log] });
+        }
         break;
       }
 
@@ -152,7 +171,7 @@ export class VesselConnection {
   move(dx: number, dy: number): void {
     this.cost(5);
     this.send({ type: 'move', direction: [dx, dy] });
-    this.clearActiveScans();
+    this.updateScans([dx, dy]);
   }
 
   fireTorpedo(dx: number, dy: number) { this.cost(10); this.send({ type: 'fire_torpedo', direction: [dx, dy] }); }
@@ -169,6 +188,7 @@ export class VesselConnection {
    * Idéal pour nourrir automatiquement SmartNavigation !
    */
   async scanAndGetNavigationContext(waitMs: number = 300) {
+    this.clearActiveScans();
     this.scanRadar();
     // Attend la réception des messages `active_scan` via le WebSocket
     await new Promise(resolve => setTimeout(resolve, waitMs));
@@ -214,6 +234,22 @@ export class VesselConnection {
   private clearActiveScans(): void {
     const s = this.state$.value;
     if (s) this.state$.next({ ...s, scanned: [] });
+  }
+
+  private updateScans(position: number[]): void {
+    const s = this.state$.value;
+
+    const unique = Array.from(
+      new Map(
+       s?.scanned.map(obj => [obj.position.join(','), obj])
+     ).values()
+    );
+
+    const updatedList = unique.map(scanObject => {
+     scanObject.position = scanObject.position.map((value, index) => value - position[index])
+     return scanObject}
+    );
+    if (s) this.state$.next({ ...s, scanned: updatedList ?? [] });
   }
 
   private cost(c: number): void {
