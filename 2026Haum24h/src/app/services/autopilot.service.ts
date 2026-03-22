@@ -154,8 +154,6 @@ export class AutoPilotService implements OnDestroy {
         return;
       }
     }
-
-    vessel.scanRadar();
   }
 
   // Génère tous les vecteurs [x,y,z] avec norme <= maxDist, triés par angle 3D avec l'idéal
@@ -209,8 +207,8 @@ export class AutoPilotService implements OnDestroy {
   private shootAt(vessel: VesselConnection, enemy: ScannedObject, energy: number): void {
     if (this.isFriendlyPosition(enemy.position, vessel)) return;
     const [dx, dy, dz] = enemy.position;
-    if (energy >= 50) {
-      vessel.fireLaser3d(Math.sign(dx), Math.sign(dy), Math.sign(dz));
+    if (energy >= 75) {
+      vessel.fireIem3d(Math.sign(dx), Math.sign(dy), Math.sign(dz));
     } else if (energy >= 10) {
       vessel.fireTorpedo3d(Math.sign(dx), Math.sign(dy), Math.sign(dz));
     }
