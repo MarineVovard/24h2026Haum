@@ -42,7 +42,7 @@ export type InMessage  = EvHello | EvNewVessels | EvStats | EvStartBattle | EvDa
   | EvResourceDepleted | EvPong | EvWon | EvEnd | EvInvalidMsg | EvMoveAborded;
 
 // ── Rôles des vaisseaux ───────────────────────────────────────────────────────
-export type VesselRole = 'fighter' | 'survivor' | 'miner' | 'collector' | 'smart_aggressive';
+export type VesselRole = 'fighter' | 'survivor' | 'miner' | 'collector';
 
 export interface RoleInfo {
   id: VesselRole;
@@ -52,11 +52,10 @@ export interface RoleInfo {
 }
 
 export const ROLES: RoleInfo[] = [
-  { id: 'fighter',          emoji: '⚔️',  label: 'Combattant',          description: 'Récupère les ressources et tire sur les ennemis détectés' },
-  { id: 'survivor',         emoji: '🛡️',  label: 'Survivant',           description: 'Fuit dès qu\'un danger est détecté, priorité à la survie' },
-  { id: 'miner',            emoji: '💣',  label: 'Poseur de mines',     description: 'Pose des mines sur son chemin et se déplace en continu' },
-  { id: 'collector',        emoji: '💎',  label: 'Collecteur',          description: 'Récupère les ressources en priorité, tire en dernier recours' },
-  { id: 'smart_aggressive', emoji: '🧠⚔️', label: 'Chasseur intelligent', description: 'Utilise la navigation intelligente (Greedy) pour éviter les obstacles et traquer agressivement les ennemis' },
+  { id: 'fighter',   emoji: '⚔️',  label: 'Combattant',   description: 'Récupère les ressources et tire sur les ennemis détectés' },
+  { id: 'survivor',  emoji: '🛡️',  label: 'Survivant',    description: 'Fuit dès qu\'un danger est détecté, priorité à la survie' },
+  { id: 'miner',     emoji: '💣',  label: 'Poseur de mines', description: 'Pose des mines sur son chemin et se déplace en continu' },
+  { id: 'collector', emoji: '💎',  label: 'Collecteur',   description: 'Récupère les ressources en priorité, tire en dernier recours' },
 ];
 
 // ── État local d'un vaisseau ──────────────────────────────────────────────────
@@ -69,6 +68,7 @@ export interface VesselState {
   frozen: boolean;
   battleStarted: boolean;
   scanned: ScannedObject[];
+  allies: Set<string>;  // noms des vaisseaux alliés détectés
   log: string[];
   role: VesselRole;
 }
@@ -78,4 +78,5 @@ export interface ScannedObject {
   position: number[];
   ts: number;
   isActive: boolean;
+  allyVessel: boolean;  // true = vaisseau allié, ne pas cibler
 }

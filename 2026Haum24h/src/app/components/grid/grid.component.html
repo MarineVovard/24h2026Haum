@@ -1,95 +1,85 @@
 <div class="grid-wrap">
-  @if (state) {
 
+  @if (state) {
     <!-- Barre énergie -->
     <div class="top-bar">
-      <span class="energy-label">⚡ Énergie</span>
+      <span class="energy-label">⚡</span>
       <div class="energy-bar-bg">
-        <div class="energy-bar"
-             [style.width.%]="state.energy"
-             [class.low]="state.energy < 20">
-        </div>
+        <div class="energy-bar" [style.width.%]="state.energy" [class.low]="state.energy < 20"></div>
       </div>
       <span class="energy-val">{{ energyDisplay() }}</span>
       @if (state.frozen)         { <span class="badge frozen">🧊 Gelé</span> }
       @if (!state.battleStarted) { <span class="badge lobby">⏳ Lobby</span> }
+      <span class="hint">🖱️ Glisser pour orbiter · Molette pour zoomer</span>
     </div>
-
-    <!-- Grille -->
-    <div class="grid" [style.grid-template-columns]="gridColumns()">
-      @for (cell of cells; track cell.id) {
-        <div
-          class="cell"
-          [class.center]="cell.x === 0 && cell.y === 0"
-          [class.has-object]="getObject(cell.x, cell.y)"
-          [class.clickable]="cell.x !== 0 || cell.y !== 0"
-          [title]="getLabel(cell.x, cell.y)"
-          (click)="onCellClick(cell.x, cell.y)">
-
-          @if (cell.x === 0 && cell.y === 0) {
-            <span class="icon">🛸</span>
-          } @else {
-            @if (getObject(cell.x, cell.y); as obj) {
-              <span class="icon">{{ getIcon(obj.what) }}</span>
-            }
-          }
-          <span class="coord">{{ cell.x }},{{ cell.y }}</span>
-        </div>
-      }
-    </div>
-
-    <!-- Contrôles -->
-    <div class="controls" [class.disabled]="autoPilot">
-
-      <!-- D-pad -->
-      <div class="dpad">
-        <div class="dpad-row">
-          <button class="diag" (click)="move(-1,-1)">↖</button>
-          <button (click)="move(0,-1)">▲</button>
-          <button class="diag" (click)="move(1,-1)">↗</button>
-        </div>
-        <div class="dpad-row">
-          <button (click)="move(-1,0)">◀</button>
-          <button class="scan-btn" (click)="scan()" title="Scan radar (5⚡)">📡</button>
-          <button (click)="move(1,0)">▶</button>
-        </div>
-        <div class="dpad-row">
-          <button class="diag" (click)="move(-1,1)">↙</button>
-          <button (click)="move(0,1)">▼</button>
-          <button class="diag" (click)="move(1,1)">↘</button>
-        </div>
-        <button class="magic-btn" (click)="magicAutoFarm()" style="margin-top: 10px; width: 100%; border-color: gold; color: gold" title="Scan & Collecte ressource proche">🪄 Bot Collecte</button>
-      </div>
-
-      <!-- Armes -->
-      <div class="weapon-section">
-        <div class="dir-select">
-          <label>Direction arme</label>
-          <select [(ngModel)]="weaponDir">
-            <option value="N">Nord ↑</option>
-            <option value="S">Sud ↓</option>
-            <option value="E">Est →</option>
-            <option value="W">Ouest ←</option>
-            <option value="NE">Nord-Est ↗</option>
-            <option value="NW">Nord-Ouest ↖</option>
-            <option value="SE">Sud-Est ↘</option>
-            <option value="SW">Sud-Ouest ↙</option>
-          </select>
-        </div>
-
-        <div class="weapon-btns">
-          <button (click)="fireTorpedo()" title="10⚡">🔥 Torpille</button>
-          <button (click)="fireLaser()"   title="50⚡">⚡ Laser</button>
-          <button (click)="fireIem()"     title="30⚡">🧊 IEM</button>
-          <button (click)="mine()"        title="10⚡">💣 Mine</button>
-        </div>
-
-        <button class="danger-btn" (click)="autodestruct()">💥 Autodestruction</button>
-        <button class="ping-btn"   (click)="ping()">🏓 Ping</button>
-      </div>
-    </div>
-
-  } @else {
-    <div class="waiting">En attente de connexion au vaisseau...</div>
   }
+
+  <div class="scene-and-controls">
+
+    <!-- Canvas Three.js — prend toute la hauteur -->
+    <canvas #threeCanvas class="three-canvas"></canvas>
+
+    @if (state) {
+      <!-- Panneau de contrôles latéral -->
+      <div class="side-controls" [class.disabled]="autoPilot">
+
+        <div class="control-section">
+          <div class="section-title">Déplacement XY</div>
+          <div class="dpad">
+            <div class="dpad-row">
+              <button class="diag" (click)="move(-1,-1,0)">↖</button>
+              <button (click)="move(0,-1,0)">▲</button>
+              <button class="diag" (click)="move(1,-1,0)">↗</button>
+            </div>
+            <div class="dpad-row">
+              <button (click)="move(-1,0,0)">◀</button>
+              <button class="scan-btn" (click)="scan()" title="Scan radar (5⚡)">📡</button>
+              <button (click)="move(1,0,0)">▶</button>
+            </div>
+            <div class="dpad-row">
+              <button class="diag" (click)="move(-1,1,0)">↙</button>
+              <button (click)="move(0,1,0)">▼</button>
+              <button class="diag" (click)="move(1,1,0)">↘</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="control-section">
+          <div class="section-title">Axe Z</div>
+          <div class="z-pad">
+            <button (click)="move(0,0,1)">▲ Z+</button>
+            <button (click)="move(0,0,-1)">▼ Z-</button>
+          </div>
+        </div>
+
+        <div class="control-section">
+          <div class="section-title">Direction tir</div>
+          <select [(ngModel)]="weaponDir">
+            @for (d of weaponDirs; track d) {
+              <option [value]="d">{{ d }}</option>
+            }
+          </select>
+          <div class="weapon-btns">
+            <button (click)="fireTorpedo()" title="10⚡">🔥 Torpille</button>
+            <button (click)="fireLaser()"   title="50⚡">⚡ Laser</button>
+            <button (click)="fireIem()"     title="30⚡">🧊 IEM</button>
+            <button (click)="mine()"        title="10⚡">💣 Mine</button>
+          </div>
+        </div>
+
+        <div class="control-section">
+          <button class="danger-btn" (click)="autodestruct()">💥 Auto-destruct</button>
+          <button class="ping-btn"   (click)="ping()">🏓 Ping</button>
+        </div>
+
+        @if (autoPilot) {
+          <div class="autopilot-overlay">🤖 Auto</div>
+        }
+
+      </div>
+    } @else {
+      <div class="waiting">En attente de connexion...</div>
+    }
+
+  </div>
 </div>
