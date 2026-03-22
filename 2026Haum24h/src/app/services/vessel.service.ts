@@ -181,8 +181,8 @@ export class VesselConnection {
   // ── Commandes 3D ──────────────────────────────────────────────────────────
   move3d(dx: number, dy: number, dz: number): void {
     this.cost(5);
-    this.send({ type: 'move', direction: [dx, dy] });
-    this.updateScans([dx, dy]);
+    this.send({ type: 'move', direction: [dx, dy, dz] });
+    this.updateScans([dx, dy, dz]);
   }
 
   fireTorpedo3d(dx: number, dy: number, dz: number) { this.cost(10); this.send({ type: 'fire_torpedo', direction: [dx, dy, dz] }); }
