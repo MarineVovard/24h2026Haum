@@ -111,7 +111,8 @@ export class VesselConnection {
           position: msg.position,
           ts: Date.now() + 8000,
           isActive: true,
-          allyVessel: false // sera mis à jour via passive_scan
+          allyVessel: false,
+          uid: `${msg.what}_${msg.position.join('_')}_${Date.now()}`
         };
         const filtered = cur.scanned.filter(s =>
           !(s.position[0] === obj.position[0] &&
@@ -132,9 +133,10 @@ export class VesselConnection {
             const obj: ScannedObject = {
               what: 'explosion',
               position: pos,
-              ts: Date.now() + 3000, // expire vite
+              ts: Date.now() + 3000,
               isActive: true,
-              allyVessel: false
+              allyVessel: false,
+              uid: `explosion_${pos.join('_')}_${Date.now()}`
             };
             this.state$.next({ ...cur,
               scanned: [...cur.scanned, obj],
@@ -189,7 +191,7 @@ export class VesselConnection {
   move3d(dx: number, dy: number, dz: number): void {
     this.cost(5);
     this.send({ type: 'move', direction: [dx, dy, dz] });
-    this.clearActiveScans();
+    this.updateScannedPositions(dx, dy, dz);
   }
 
   fireTorpedo3d(dx: number, dy: number, dz: number) { this.cost(10); this.send({ type: 'fire_torpedo', direction: [dx, dy, dz] }); }
@@ -213,9 +215,20 @@ export class VesselConnection {
     };
   }
 
-  private clearActiveScans(): void {
+  // Met à jour les positions relatives après un déplacement
+  // Les objets scannés restent valides : on soustrait le vecteur de déplacement
+  private updateScannedPositions(dx: number, dy: number, dz: number): void {
     const s = this.state$.value;
-    if (s) this.state$.next({ ...s, scanned: [] });
+    if (!s) return;
+    const updated = s.scanned.map(obj => ({
+      ...obj,
+      position: [
+        obj.position[0] - dx,
+        obj.position[1] - dy,
+        (obj.position[2] ?? 0) - dz
+      ]
+    }));
+    this.state$.next({ ...s, scanned: updated });
   }
 
   private cost(c: number): void {
