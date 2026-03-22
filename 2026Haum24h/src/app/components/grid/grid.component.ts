@@ -51,7 +51,7 @@ export class GridComponent implements OnChanges, AfterViewInit, OnDestroy {
   private shipMesh!: THREE.Mesh;
   private isDragging = false;
   private prevMouse  = { x: 0, y: 0 };
-  private spherical  = { theta: Math.PI / 6, phi: Math.PI / 4, radius: 50 };
+  private spherical  = { theta: Math.PI / 5, phi: 1.1, radius: 60 };
 
   constructor(private ngZone: NgZone) {}
 
@@ -207,8 +207,9 @@ export class GridComponent implements OnChanges, AfterViewInit, OnDestroy {
       });
     }
 
-    // Ajouter les nouveaux objets
-    scanned.forEach(s => {
+    // Afficher uniquement les objets avec position fiable (active_scan ou explosion)
+    // Les passive_scan 'move' ont un vecteur de déplacement, pas une position → exclus
+    scanned.filter(s => s.isActive).forEach(s => {
       const key = this.objKey(s);
       if (!this.objects.has(key)) {
         const mesh = this.createObjectMesh(s);
@@ -224,12 +225,11 @@ export class GridComponent implements OnChanges, AfterViewInit, OnDestroy {
 
   private createObjectMesh(s: ScannedObject): THREE.Object3D {
     const color = OBJECT_COLORS[s.what] ?? 0xffffff;
-    // Mapping direct serveur → Three.js
-    // Le serveur envoie des coordonnées relatives [x, y, z]
-    // On mappe directement : serveur X→Three X, serveur Y→Three Z, serveur Z→Three Y
+    // Mapping direct : serveur [x, y, z] → Three.js [x, y, z]
+    // Pas de swap — les coordonnées relatives du serveur sont utilisées telles quelles
     const px = s.position[0] ?? 0;
-    const py = s.position[2] ?? 0;
-    const pz = s.position[1] ?? 0;
+    const py = s.position[1] ?? 0;
+    const pz = s.position[2] ?? 0;
 
     let mesh: THREE.Mesh;
 

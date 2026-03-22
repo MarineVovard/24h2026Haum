@@ -124,17 +124,45 @@ export class VesselConnection {
 
       case 'passive_scan': {
         if (!cur) break;
-        const details = msg.what === 'move'
-          ? `vaisseau ${(msg as any).vessel} s'est déplacé`
-          : `explosion détectée`;
-        // Enregistrer les alliés (même équipe) depuis le passive_scan
-        const newAllies = new Set(cur.allies);
-        if (msg.what === 'move' && (msg as any).vessel) {
-          const vid: string = (msg as any).vessel;
+
+        if (msg.what === 'explosion') {
+          // explosion : position relative connue → on l'affiche sur la scène
+          const pos = (msg as any).position as number[];
+          if (pos) {
+            const obj: ScannedObject = {
+              what: 'explosion',
+              position: pos,
+              ts: Date.now() + 3000, // expire vite
+              isActive: true,
+              allyVessel: false
+            };
+            this.state$.next({ ...cur,
+              scanned: [...cur.scanned, obj],
+              log: [`💥 Explosion détectée en [${pos.join(', ')}]`, ...cur.log]
+            });
+          } else {
+            this.state$.next({ ...cur, log: ['💥 Explosion détectée (position inconnue)', ...cur.log] });
+          }
+
+        } else if (msg.what === 'move') {
+          // move : on reçoit vessel (nom) + movement (vecteur de déplacement)
+          // PAS une position absolue — on ne peut pas placer l'objet sur la scène
+          const vessel = (msg as any).vessel as string;
+          const movement = (msg as any).movement as number[];
           const ownTeam = cur.id.split(':')[0];
-          if (vid.startsWith(ownTeam + ':')) newAllies.add(vid);
+
+          // Détecter les alliés (même équipe)
+          const newAllies = new Set(cur.allies);
+          if (vessel && vessel.startsWith(ownTeam + ':')) {
+            newAllies.add(vessel);
+          }
+
+          const log = movement
+            ? `👁 ${vessel} s'est déplacé de [${movement.join(', ')}]`
+            : `👁 ${vessel} s'est déplacé`;
+
+          this.state$.next({ ...cur, allies: newAllies, log: [log, ...cur.log] });
         }
-        this.state$.next({ ...cur, allies: newAllies, log: [`👁 Scan passif: ${details}`, ...cur.log] });
         break;
       }
 
