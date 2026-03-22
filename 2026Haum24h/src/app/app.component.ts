@@ -11,7 +11,7 @@ import { SetupComponent } from './components/setup/setup.component';
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [CommonModule, AsyncPipe, GridComponent, FleetPanelComponent, EventLogComponent, SetupComponent],
+  imports: [CommonModule, GridComponent, FleetPanelComponent, EventLogComponent, SetupComponent],
   templateUrl: './app.component.html',
   styleUrl: './app.component.scss'
 })

@@ -15,6 +15,8 @@ export class FleetPanelComponent {
   @Input()  selected: VesselConnection | null = null;
   @Output() select = new EventEmitter<VesselConnection>();
 
+  items : string[] = ['fighter', 'survivor', 'miner', 'collector']
+
   statNames = ['H', 'A', 'S', 'R'];
 
   shortId(id: string): string {
@@ -33,5 +35,19 @@ export class FleetPanelComponent {
   reconnect(event: MouseEvent, v: VesselConnection): void {
     event.stopPropagation(); // ne pas déclencher le select
     v.reconnect();
+  }
+
+  onSelect(event: any, vessel: any): void {
+    const role = event.target.value;
+    
+    if (vessel.state$?.next) {
+      // si state$ est un BehaviorSubject ou Subject
+      const current = vessel.state$.value; // snapshot actuel
+      vessel.state$.next({ ...current, role: role }); // met à jour le rôle
+    } else if (vessel.state) {
+      // si c’est un simple objet
+      vessel.state.role = role;
+    }
+    // console.log('Nouvel état snapshot :', vessel.state$.value);
   }
 }

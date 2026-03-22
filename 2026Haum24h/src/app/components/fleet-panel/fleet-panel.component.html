@@ -2,61 +2,59 @@
   <div class="panel-title">⚓ Flotte</div>
 
   @for (v of vessels; track v) {
-    @if (v.state$ | async; as s) {
-      <div class="vessel-card" [class.selected]="v === selected" (click)="select.emit(v)">
+  @if (v.state$ | async; as s) {
+  <div class="vessel-card" [class.selected]="v === selected" (click)="select.emit(v)">
 
-        <div class="vessel-header">
-          <span class="role-badge" [title]="s.role">{{ roleEmoji(s.role) }}</span>
-          <span class="vessel-id">{{ shortId(s.id) }}</span>
-          @if (s.frozen)         { <span class="badge frozen">🧊</span> }
-          @if (!s.battleStarted) { <span class="badge lobby">⏳</span> }
+    <div class="vessel-header">
+      <span class="role-badge" [title]="s.role">{{ roleEmoji(s.role) }}</span>
+      <span class="vessel-id">{{ shortId(s.id) }}</span>
+      @if (s.frozen) { <span class="badge frozen">🧊</span> }
+      @if (!s.battleStarted) { <span class="badge lobby">⏳</span> }
 
-          @if (v.wsStatus$ | async; as status) {
-            <span class="ws-status"
-                  [class.open]="status === 'open'"
-                  [class.closed]="status === 'closed'"
-                  [class.connecting]="status === 'connecting'"
-                  [title]="status">
-              {{ status === 'open' ? '🟢' : status === 'connecting' ? '🟡' : '🔴' }}
-            </span>
-            @if (status === 'closed') {
-              <button class="reconnect-btn" (click)="reconnect($event, v)" title="Reconnecter">↩</button>
-            }
-          }
+      @if (v.wsStatus$ | async; as status) {
+      <span class="ws-status" [class.open]="status === 'open'" [class.closed]="status === 'closed'"
+        [class.connecting]="status === 'connecting'" [title]="status">
+        {{ status === 'open' ? '🟢' : status === 'connecting' ? '🟡' : '🔴' }}
+      </span>
+      @if (status === 'closed') {
+      <button class="reconnect-btn" (click)="reconnect($event, v)" title="Reconnecter">↩</button>
+      }
+      }
+    </div>
+
+    <div class="bar-row">
+      <span class="bar-lbl">❤️</span>
+      <div class="bar-bg">
+        <div class="bar hp-bar" [style.width.%]="hpPercent(s.hp, s.maxHp)" [class.low]="hpPercent(s.hp, s.maxHp) < 30">
         </div>
-
-        <div class="bar-row">
-          <span class="bar-lbl">❤️</span>
-          <div class="bar-bg">
-            <div class="bar hp-bar"
-                 [style.width.%]="hpPercent(s.hp, s.maxHp)"
-                 [class.low]="hpPercent(s.hp, s.maxHp) < 30">
-            </div>
-          </div>
-          <span class="bar-val">{{ s.hp }}/{{ s.maxHp }}</span>
-        </div>
-
-        <div class="bar-row">
-          <span class="bar-lbl">⚡</span>
-          <div class="bar-bg">
-            <div class="bar nrj-bar"
-                 [style.width.%]="s.energy"
-                 [class.low]="s.energy < 20">
-            </div>
-          </div>
-          <span class="bar-val">{{ s.energy | number:'1.0-0' }}</span>
-        </div>
-
-        <div class="stats">
-          @for (name of statNames; track name; let i = $index) {
-            <div class="stat-pill">
-              <span class="stat-name">{{ name }}</span>
-              <span class="stat-val">{{ s.stats[i] }}</span>
-            </div>
-          }
-        </div>
-
       </div>
-    }
+      <span class="bar-val">{{ s.hp }}/{{ s.maxHp }}</span>
+    </div>
+
+    <div class="bar-row">
+      <span class="bar-lbl">⚡</span>
+      <div class="bar-bg">
+        <div class="bar nrj-bar" [style.width.%]="s.energy" [class.low]="s.energy < 20">
+        </div>
+      </div>
+      <span class="bar-val">{{ s.energy | number:'1.0-0' }}</span>
+    </div>
+
+    <div class="stats">
+      @for (name of statNames; track name; let i = $index) {
+      <div class="stat-pill">
+        <span class="stat-name">{{ name }}</span>
+        <span class="stat-val">{{ s.stats[i] }}</span>
+      </div>
+      }
+    </div>
+
+  </div>
+  <select (change)="onSelect($event, v)">
+    <option *ngFor="let item of items" [value]="item">
+      {{ item }}
+    </option>
+  </select>
+  }
   }
 </div>
