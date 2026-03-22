@@ -24,10 +24,24 @@ export class AutoPilotService implements OnDestroy {
         });
 
         const msgSub = vessel.messages$.subscribe(msg => {
-          if (msg.type === 'passive_scan' && msg.what === 'move' && (msg as any).vessel) {
-            const vid: string = (msg as any).vessel;
-            const ownPrefix = vessel.state$.value?.id.split(':').slice(0, 1).join(':');
-            if (ownPrefix && vid.startsWith(ownPrefix)) this.friendlyIds.add(vid);
+          if (msg.type !== 'passive_scan' || msg.what !== 'move') return;
+          const vid: string = (msg as any).vessel;
+          if (!vid) return;
+
+          // ownTeam depuis l'état du vaisseau ou depuis vessel.team (si stats pas encore reçu)
+          const state   = vessel.state$.value;
+          const ownTeam = state?.id.split(':')[0] ?? vessel.team;
+
+          if (!ownTeam) {
+            // Équipe inconnue : scan défensif
+            this.reactToEnemyPassiveScan(vessel, vid);
+            return;
+          }
+
+          if (vid.startsWith(ownTeam + ':')) {
+            this.friendlyIds.add(vid);
+          } else {
+            this.reactToEnemyPassiveScan(vessel, vid);
           }
         });
 
@@ -77,8 +91,9 @@ export class AutoPilotService implements OnDestroy {
     const resources = scanned.filter(s => s.what === 'resource');
 
     if (enemies.length > 0 && energy >= 10) { this.shootAt(vessel, enemies[0], energy); return; }
-    if (resources.length > 0 && energy >= 5) { this.moveSafe(vessel, this.closest(resources), scanned); return; }
-    this.explore(vessel, energy, scanned);
+    if (resources.length > 0 && energy >= 10) { this.moveSafe(vessel, this.closest(resources), scanned); return; }
+    
+	 if (resources.length > 0 && energy >= 15) {this.explore(vessel, energy, scanned)};
   }
 
   private tickSurvivor(vessel: VesselConnection): void {
@@ -154,6 +169,8 @@ export class AutoPilotService implements OnDestroy {
         return;
       }
     }
+
+    vessel.scanRadar();
   }
 
   // Génère tous les vecteurs [x,y,z] avec norme <= maxDist, triés par angle 3D avec l'idéal
@@ -252,7 +269,9 @@ export class AutoPilotService implements OnDestroy {
   }
 
   private getEnemies(scanned: ScannedObject[]): ScannedObject[] {
-    return scanned.filter(s => s.what === 'vessel' && !s.allyVessel);
+    // isActive = true uniquement pour les active_scan → position fiable
+    // Les passive_scan 'move' ne donnent PAS de position → exclus du tir
+    return scanned.filter(s => s.what === 'vessel' && s.isActive && !s.allyVessel);
   }
 
   private getDangers(scanned: ScannedObject[]): ScannedObject[] {

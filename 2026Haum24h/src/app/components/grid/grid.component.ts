@@ -208,10 +208,17 @@ export class GridComponent implements OnChanges, AfterViewInit, OnDestroy {
     }
 
     // Afficher uniquement les objets avec position fiable (active_scan ou explosion)
-    // Les passive_scan 'move' ont un vecteur de déplacement, pas une position → exclus
     scanned.filter(s => s.isActive).forEach(s => {
       const key = this.objKey(s);
-      if (!this.objects.has(key)) {
+      const existing = this.objects.get(key);
+      if (existing) {
+        // Mettre à jour la position du mesh existant (après un déplacement du vaisseau)
+        existing.position.set(
+          s.position[0] ?? 0,
+          s.position[1] ?? 0,
+          s.position[2] ?? 0
+        );
+      } else {
         const mesh = this.createObjectMesh(s);
         this.scene.add(mesh);
         this.objects.set(key, mesh);
@@ -220,7 +227,8 @@ export class GridComponent implements OnChanges, AfterViewInit, OnDestroy {
   }
 
   private objKey(s: ScannedObject): string {
-    return `${s.what}_${s.position.join('_')}`;
+    // Utiliser uid stable si disponible, sinon fallback sur type+position initiale
+    return s.uid ?? `${s.what}_${s.position.join('_')}`;
   }
 
   private createObjectMesh(s: ScannedObject): THREE.Object3D {
