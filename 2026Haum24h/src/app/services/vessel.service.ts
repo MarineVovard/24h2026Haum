@@ -5,22 +5,21 @@ import { InMessage, OutMessage, VesselState, ScannedObject, VesselRole } from '.
 export class VesselConnection {
 
   private socket!: WebSocket;
-  state$ = new BehaviorSubject<VesselState | null>(null);
+  state$    = new BehaviorSubject<VesselState | null>(null);
   messages$ = new Subject<InMessage>();
   wsStatus$ = new BehaviorSubject<'connecting' | 'open' | 'closed'>('connecting');
-  heartbeatInterval:any;
 
   private energyInterval: any;
   private vesselId = '';
   private needKeys = false;
-  private key = '';
+  private key      = '';
 
-  constructor(private serverUrl: string, public role: VesselRole) { }
+  constructor(private serverUrl: string, public role: VesselRole, public team: string = '') {}
 
   connect(id: string, needKeys: boolean, key?: string): void {
     this.vesselId = id;
     this.needKeys = needKeys;
-    this.key = key ?? '';
+    this.key      = key ?? '';
     this.openSocket();
   }
 
@@ -40,11 +39,6 @@ export class VesselConnection {
     this.socket.onopen = () => {
       this.wsStatus$.next('open');
       this.send({ type: 'connect', id: this.vesselId, ...(this.needKeys && this.key ? { key: this.key } : {}) });
-      
-      // ❤️ heartbeat toutes les 20s
-      this.heartbeatInterval = setInterval(() => {
-      this.send({ type: 'ping' });
-      }, 10000);
     };
 
     this.socket.onmessage = (ev) => {
@@ -70,12 +64,12 @@ export class VesselConnection {
         this.state$.next({
           id, stats: msg.stats, hp: msg.hp, maxHp: msg.hp,
           energy: 100, frozen: false, battleStarted: false,
-          scanned: [], log: ['Connecté ✅'], role: this.role
+          scanned: [], allies: new Set<string>(), log: ['Connecté ✅'], role: this.role
         });
         this.energyInterval = setInterval(() => {
           const s = this.state$.value;
           if (s) this.state$.next({ ...s, energy: Math.min(100, s.energy + 4) });
-        }, 5000);
+        }, 1000);
         break;
 
       case 'start_battle':
@@ -112,9 +106,17 @@ export class VesselConnection {
 
       case 'active_scan': {
         if (!cur) break;
-        const obj: ScannedObject = { what: msg.what, position: msg.position, ts: Date.now() + 8000, isActive: true };
+        const obj: ScannedObject = {
+          what: msg.what,
+          position: msg.position,
+          ts: Date.now() + 8000,
+          isActive: true,
+          allyVessel: false // sera mis à jour via passive_scan
+        };
         const filtered = cur.scanned.filter(s =>
-          !(s.position[0] === obj.position[0] && s.position[1] === obj.position[1])
+          !(s.position[0] === obj.position[0] &&
+            s.position[1] === obj.position[1] &&
+            s.position[2] === obj.position[2])
         );
         this.state$.next({ ...cur, scanned: [...filtered, obj] });
         break;
@@ -122,11 +124,17 @@ export class VesselConnection {
 
       case 'passive_scan': {
         if (!cur) break;
-        if(cur.id.split(":")[0] === msg.vessel?.split(':')[0]) break;
         const details = msg.what === 'move'
           ? `vaisseau ${(msg as any).vessel} s'est déplacé`
           : `explosion détectée`;
-        this.state$.next({ ...cur, log: [`👁 Scan passif: ${details}`, ...cur.log] });
+        // Enregistrer les alliés (même équipe) depuis le passive_scan
+        const newAllies = new Set(cur.allies);
+        if (msg.what === 'move' && (msg as any).vessel) {
+          const vid: string = (msg as any).vessel;
+          const ownTeam = cur.id.split(':')[0];
+          if (vid.startsWith(ownTeam + ':')) newAllies.add(vid);
+        }
+        this.state$.next({ ...cur, allies: newAllies, log: [`👁 Scan passif: ${details}`, ...cur.log] });
         break;
       }
 
@@ -139,7 +147,7 @@ export class VesselConnection {
         break;
 
       case 'pong':
-        if (cur) this.state$.next({ ...cur });
+        if (cur) this.state$.next({ ...cur, log: [`🏓 Pong (n=${(msg as any).n})`, ...cur.log] });
         break;
     }
   }
@@ -149,65 +157,31 @@ export class VesselConnection {
       this.socket.send(JSON.stringify(msg));
   }
 
-  move(dx: number, dy: number): void {
+  // ── Commandes 3D ──────────────────────────────────────────────────────────
+  move3d(dx: number, dy: number, dz: number): void {
     this.cost(5);
-    this.send({ type: 'move', direction: [dx, dy] });
+    this.send({ type: 'move', direction: [dx, dy, dz] });
     this.clearActiveScans();
   }
 
-  fireTorpedo(dx: number, dy: number) { this.cost(10); this.send({ type: 'fire_torpedo', direction: [dx, dy] }); }
-  dropMine(delay = 3.0) { this.cost(10); this.send({ type: 'drop_mine', delay }); }
-  fireLaser(dx: number, dy: number) { this.cost(50); this.send({ type: 'fire_laser', direction: [dx, dy] }); }
-  fireIem(dx: number, dy: number) { this.cost(30); this.send({ type: 'fire_iem', direction: [dx, dy] }); }
-  scanRadar() { this.cost(5); this.send({ type: 'scan_radar' }); }
-  ping() { this.send({ type: 'ping', n: Date.now() }); }
-  autodestruct() { this.send({ type: 'autodestruction' }); }
+  fireTorpedo3d(dx: number, dy: number, dz: number) { this.cost(10); this.send({ type: 'fire_torpedo', direction: [dx, dy, dz] }); }
+  dropMine(delay = 3.0)                             { this.cost(10); this.send({ type: 'drop_mine',    delay }); }
+  fireLaser3d(dx: number, dy: number, dz: number)   { this.cost(50); this.send({ type: 'fire_laser',   direction: [dx, dy, dz] }); }
+  fireIem3d(dx: number, dy: number, dz: number)     { this.cost(30); this.send({ type: 'fire_iem',     direction: [dx, dy, dz] }); }
+  scanRadar()                                        { this.cost(5);  this.send({ type: 'scan_radar' }); }
+  ping()                                             {                this.send({ type: 'ping', n: Date.now() }); }
+  autodestruct()                                     {                this.send({ type: 'autodestruction' }); }
 
-  /**
-   * Lance un scan radar, attend quelques ms (réponses du serveur),
-   * et renvoie le contexte trié (position, cibles, obstacles).
-   * Idéal pour nourrir automatiquement SmartNavigation !
-   */
-  async scanAndGetNavigationContext(waitMs: number = 300) {
-    this.scanRadar();
-    // Attend la réception des messages `active_scan` via le WebSocket
-    await new Promise(resolve => setTimeout(resolve, waitMs));
-    return this.getNavigationContext();
-  }
-
-  /**
-   * Extrait et trie les informations du vaisseau dans ses attributs (State).
-   */
   getNavigationContext() {
     const s = this.state$.value;
     if (!s) return null;
-
-    // TOUT est relatif, la position du vaisseau est donc le point zéro local [0, 0].
-    const currentPos: [number, number] = [0, 0];
-
     const now = Date.now();
     const validScans = s.scanned.filter(obj => obj.ts > now);
-
-    // Mouvements ou présences de ressources
-    const resources = validScans
-      .filter(o => o.what === 'resource')
-      .map(o => o.position as [number, number]);
-
-    // On récupère "vessel" (vaisseau fixe) ou "move" (mouvement détecté) 
-    const enemyVessels = validScans
-      .filter(o => o.what === 'vessel' || o.what === 'move')
-      .map(o => o.position as [number, number]);
-
-    // Les obstacles "solides" (mines, astéroïdes, torpilles...)
-    const obstacles = validScans
-      .filter(o => ['asteroid', 'mine', 'torpedo'].includes(o.what))
-      .map(o => o.position as [number, number]);
-
     return {
-      currentPos,
-      resources,
-      enemyVessels,
-      obstacles
+      currentPos: [0, 0, 0] as [number, number, number],
+      resources:    validScans.filter(o => o.what === 'resource').map(o => o.position as [number,number,number]),
+      enemyVessels: validScans.filter(o => o.what === 'vessel').map(o => o.position as [number,number,number]),
+      obstacles:    validScans.filter(o => ['asteroid','mine','torpedo'].includes(o.what)).map(o => o.position as [number,number,number])
     };
   }
 
@@ -227,12 +201,12 @@ export class VesselService {
   private connections = new Map<string, VesselConnection>();
   vessels$ = new BehaviorSubject<VesselConnection[]>([]);
 
-  createAll(ids: string[], roles: VesselRole[], serverUrl: string, needKeys: boolean, key?: string): void {
+  createAll(ids: string[], roles: VesselRole[], serverUrl: string, needKeys: boolean, key?: string, team?: string): void {
     this.connections.clear();
     const conns: VesselConnection[] = [];
     ids.forEach((id, i) => {
       const role = roles[i] ?? 'fighter';
-      const conn = new VesselConnection(serverUrl, role);
+      const conn = new VesselConnection(serverUrl, role, team ?? '');
       conn.connect(id, needKeys, key);
       this.connections.set(id, conn);
       conns.push(conn);
@@ -240,11 +214,6 @@ export class VesselService {
     this.vessels$.next(conns);
   }
 
-  get(id: string): VesselConnection | undefined {
-    return this.connections.get(id);
-  }
-
-  getAll(): VesselConnection[] {
-    return [...this.connections.values()];
-  }
+  get(id: string): VesselConnection | undefined { return this.connections.get(id); }
+  getAll(): VesselConnection[] { return [...this.connections.values()]; }
 }
