@@ -8,6 +8,7 @@ export class VesselConnection {
   state$    = new BehaviorSubject<VesselState | null>(null);
   messages$ = new Subject<InMessage>();
   wsStatus$ = new BehaviorSubject<'connecting' | 'open' | 'closed'>('connecting');
+  heartbeatInterval:any;
 
   private energyInterval: any;
   private vesselId = '';
@@ -39,6 +40,10 @@ export class VesselConnection {
     this.socket.onopen = () => {
       this.wsStatus$.next('open');
       this.send({ type: 'connect', id: this.vesselId, ...(this.needKeys && this.key ? { key: this.key } : {}) });
+      // ❤️ heartbeat toutes les 20s
+      this.heartbeatInterval = setInterval(() => {
+      this.send({ type: 'ping' });
+      }, 50000);
     };
 
     this.socket.onmessage = (ev) => {
@@ -131,7 +136,7 @@ export class VesselConnection {
       case 'passive_scan': {
         if (!cur) break;
         if(cur.id.split(":")[0] === msg.vessel?.split(':')[0]) {
-          this.state$.next({ ...cur, log: [`👁 Scan passif: mon bateau move !!!`, ...cur.log] });
+          this.state$.next({ ...cur, log: [`👁 Scan passif: mon bateau se deplace en ${msg.movement}`, ...cur.log] });
           break;
         }
         const details = msg.what === 'move'
@@ -146,7 +151,7 @@ export class VesselConnection {
         }
         if(msg.what === 'move') {
           console.log("On est dans le move");
-          const obj: ScannedObject = { what: msg.what, position: msg.position ?? [], ts: Date.now() + 1000, isActive: false, allyVessel: false }; 
+          const obj: ScannedObject = { what: msg.what, position: msg.movement ?? [], ts: Date.now() + 1000, isActive: false, allyVessel: false }; 
           // [TODO]: il faut adapter le temps à la longueur du trajet
           const filtered: ScannedObject[] = cur.scannedPassive.filter(s => s.ts >= Date.now()); // on enlève les infos qui ne sont plus à jour
           console.log([...filtered, obj]);
@@ -168,7 +173,7 @@ export class VesselConnection {
         break;
 
       case 'pong':
-        if (cur) this.state$.next({ ...cur, log: [`🏓 Pong (n=${(msg as any).n})`, ...cur.log] });
+        if (cur) this.state$.next({ ...cur});
         break;
     }
   }
@@ -185,13 +190,14 @@ export class VesselConnection {
     this.updateScans([dx, dy, dz]);
   }
 
-  fireTorpedo3d(dx: number, dy: number, dz: number) { this.cost(10); this.send({ type: 'fire_torpedo', direction: [dx, dy, dz] }); }
-  dropMine(delay = 3.0)                             { this.cost(10); this.send({ type: 'drop_mine',    delay }); }
-  fireLaser3d(dx: number, dy: number, dz: number)   { this.cost(50); this.send({ type: 'fire_laser',   direction: [dx, dy, dz] }); }
-  fireIem3d(dx: number, dy: number, dz: number)     { this.cost(30); this.send({ type: 'fire_iem',     direction: [dx, dy, dz] }); }
-  scanRadar()                                        { this.cost(5);  this.send({ type: 'scan_radar' }); }
+          
+  fireTorpedo3d(dx: number, dy: number, dz: number) { this.cost(10); this.send({ type: 'fire_torpedo', direction: [dx, dy, dz] });  this.log('fire_torpedo')}
+  dropMine(delay = 3.0)                             { this.cost(10); this.send({ type: 'drop_mine',    delay }); this.log('drop_mine')}
+  fireLaser3d(dx: number, dy: number, dz: number)   { this.cost(50); this.send({ type: 'fire_laser',   direction: [dx, dy, dz] }); this.log('fire_laser') }
+  fireIem3d(dx: number, dy: number, dz: number)     { this.cost(30); this.send({ type: 'fire_iem',     direction: [dx, dy, dz] }); this.log('fire_iem') }
+  scanRadar()                                        { this.cost(5);  this.send({ type: 'scan_radar' }); this.log('scan_radar') }
   ping()                                             {                this.send({ type: 'ping', n: Date.now() }); }
-  autodestruct()                                     {                this.send({ type: 'autodestruction' }); }
+  autodestruct()                                     {                this.send({ type: 'autodestruction' }); this.log('autodestruction') }
 
   /**
    * Lance un scan radar, attend quelques ms (réponses du serveur),
@@ -206,6 +212,11 @@ export class VesselConnection {
     return this.getNavigationContext();
   }
 
+  log(msg: string) : void {
+    const cur = this.state$.value;
+    if (!cur) return;
+    this.state$.next({ ...cur, log: [`👁 Scan passif: ${msg}`, ...cur.log] });
+  }
   /**
    * Extrait et trie les informations du vaisseau dans ses attributs (State).
    */

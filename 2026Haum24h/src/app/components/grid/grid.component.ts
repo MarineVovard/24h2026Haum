@@ -27,7 +27,7 @@ const WEAPON_DIRS: Record<string, [number,number,number]> = {
 @Component({
   selector: 'app-grid',
   standalone: true,
-  imports: [CommonModule, FormsModule, DecimalPipe],
+  imports: [CommonModule, FormsModule],
   templateUrl: './grid.component.html',
   styleUrl: './grid.component.scss'
 })

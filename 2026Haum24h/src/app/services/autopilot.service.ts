@@ -14,6 +14,9 @@ export class AutoPilotService implements OnDestroy {
   private vesselSubs: Subscription[] = [];
   private friendlyIds = new Set<string>();
 
+  // Etat suivi pour les tourelles : { state, lastKnownPos, attacksSinceScan, empSent }
+  private turretStates = new Map<string, { state: 'idle' | 'scanning' | 'attacking', lastKnownPos?: [number, number], attacksSinceScan: number, empSent: boolean }>();
+
   constructor(private vesselService: VesselService) {
     this.vesselService.vessels$.subscribe(vessels => {
       this.clearVesselSubs();
@@ -65,6 +68,7 @@ export class AutoPilotService implements OnDestroy {
         case 'survivor':  this.tickSurvivor(vessel);  break;
         case 'miner':     this.tickMiner(vessel);     break;
         case 'collector': this.tickCollector(vessel); break;
+        case 'turret':    this.tickTurret(vessel);    break;
       }
     });
   }
@@ -134,7 +138,86 @@ export class AutoPilotService implements OnDestroy {
     this.explore(vessel, energy, scanned);
   }
 
-  // ── Déplacement sécurisé 3D ───────────────────────────────────────────────
+  // ── Tourelle : immobile, passive puis IEM + Spam Torpilles ────────────────
+  private tickTurret(vessel: VesselConnection): void {
+    const s = vessel.state$.value!;
+    const now = Date.now();
+    const energy = s.energy;
+
+    let tState = this.turretStates.get(s.id);
+    if (!tState) {
+      tState = { state: 'idle', attacksSinceScan: 0, empSent: false };
+      this.turretStates.set(s.id, tState);
+    }
+
+    const recentPassiveMoves = s.scannedPassive.filter(p => p.ts > now && p.what === 'move');
+    const activeEnemies = this.getEnemies(s.scanned.filter(x => x.ts > now));
+
+    switch (tState.state) {
+      case 'idle':
+        if (recentPassiveMoves.length > 0) {
+          // Mouvement détecté, on lance un scan pour localiser
+          if (energy >= 5) {
+            vessel.scanRadar();
+            tState.state = 'scanning';
+            tState.empSent = false;
+            tState.attacksSinceScan = 0;
+          }
+        }
+        break;
+
+      case 'scanning':
+        // On attend que les résultats du scan arrivent
+        if (activeEnemies.length > 0) {
+          tState.state = 'attacking';
+          const enemy = this.closest(activeEnemies);
+          tState.lastKnownPos = [enemy.position[0], enemy.position[1]];
+          this.executeTurretAttackPhase(vessel, energy, tState);
+        } else {
+          // Rien détecté, retour à l'état idle
+          tState.state = 'idle';
+        }
+        break;
+
+      case 'attacking':
+        // Faut-il re-scanner ? (1 scan actif toutes les 2 attaques)
+        if (tState.attacksSinceScan >= 2) {
+          if (energy >= 5) {
+            vessel.scanRadar();
+            tState.state = 'scanning';
+            tState.attacksSinceScan = 0;
+          }
+          break;
+        }
+
+        if (activeEnemies.length > 0) {
+           const enemy = this.closest(activeEnemies);
+           tState.lastKnownPos = [enemy.position[0], enemy.position[1]];
+        }
+        this.executeTurretAttackPhase(vessel, energy, tState);
+        break;
+    }
+  }
+
+  private executeTurretAttackPhase(vessel: VesselConnection, energy: number, tState: any): void {
+    if (!tState.lastKnownPos) return;
+    const [tx, ty, tz] = tState.lastKnownPos;
+
+    if (!tState.empSent) {
+      if (energy >= 30) {
+        vessel.fireIem3d(Math.sign(tx), Math.sign(ty), Math.sign(tz));
+        tState.empSent = true;
+      }
+    } else {
+      if (energy >= 10) {
+        vessel.fireTorpedo3d(Math.sign(tx), Math.sign(ty), Math.sign(tz));
+        tState.attacksSinceScan++;
+      }
+    }
+  }
+
+  // ── Déplacement sécurisé : évite les cases dangereuses ───────────────────
+  // Respecte la stat S (vitesse) du vaisseau et vérifie que la case d'arrivée est libre
   private moveSafe(vessel: VesselConnection, target: ScannedObject, scanned: ScannedObject[]): void {
     const state   = vessel.state$.value!;
     const maxDist = Math.max(1, state.stats[2] ?? 1);
