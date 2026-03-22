@@ -42,7 +42,7 @@ export type InMessage  = EvHello | EvNewVessels | EvStats | EvStartBattle | EvDa
   | EvResourceDepleted | EvPong | EvWon | EvEnd | EvInvalidMsg | EvMoveAborded;
 
 // ── Rôles des vaisseaux ───────────────────────────────────────────────────────
-export type VesselRole = 'fighter' | 'survivor' | 'miner' | 'collector' | 'smart_aggressive';
+export type VesselRole = 'fighter' | 'survivor' | 'miner' | 'collector' | 'smart_aggressive' | 'turret';
 
 export interface RoleInfo {
   id: VesselRole;
@@ -57,6 +57,7 @@ export const ROLES: RoleInfo[] = [
   { id: 'miner',            emoji: '💣',  label: 'Poseur de mines',     description: 'Pose des mines sur son chemin et se déplace en continu' },
   { id: 'collector',        emoji: '💎',  label: 'Collecteur',          description: 'Récupère les ressources en priorité, tire en dernier recours' },
   { id: 'smart_aggressive', emoji: '🧠⚔️', label: 'Chasseur intelligent', description: 'Utilise la navigation intelligente (Greedy) pour éviter les obstacles et traquer agressivement les ennemis' },
+  { id: 'turret',           emoji: '🗼',  label: 'Tourelle',            description: 'Ne bouge jamais. Attaque IEM et torpilles après détection passive.' },
 ];
 
 // ── État local d'un vaisseau ──────────────────────────────────────────────────
