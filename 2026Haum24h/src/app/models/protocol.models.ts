@@ -82,4 +82,5 @@ export interface ScannedObject {
   ts: number;
   isActive: boolean;
   allyVessel: boolean;  // true = vaisseau allié, ne pas cibler
+  uid?: string;         // identifiant stable, ne change pas quand la position est mise à jour
 }

@@ -122,7 +122,8 @@ export class VesselConnection {
           position: msg.position,
           ts: Date.now() + 8000,
           isActive: true,
-          allyVessel: false // sera mis à jour via passive_scan
+          allyVessel: false,
+          uid: `${msg.what}_${msg.position.join('_')}_${Date.now()}`
         };
         const filtered = cur.scanned.filter(s =>
           !(s.position[0] === obj.position[0] &&
@@ -146,8 +147,45 @@ export class VesselConnection {
         const newAllies = new Set(cur.allies);
         if (msg.what === 'move' && (msg as any).vessel) {
           const vid: string = (msg as any).vessel;
+        }
+        if (msg.what === 'explosion') {
+          // explosion : position relative connue → on l'affiche sur la scène
+          const pos = (msg as any).position as number[];
+          if (pos) {
+            const obj: ScannedObject = {
+              what: 'explosion',
+              position: pos,
+              ts: Date.now() + 3000,
+              isActive: true,
+              allyVessel: false,
+              uid: `explosion_${pos.join('_')}_${Date.now()}`
+            };
+            this.state$.next({ ...cur,
+              scanned: [...cur.scanned, obj],
+              log: [`💥 Explosion détectée en [${pos.join(', ')}]`, ...cur.log]
+            });
+          } else {
+            this.state$.next({ ...cur, log: ['💥 Explosion détectée (position inconnue)', ...cur.log] });
+          }
+
+        } else if (msg.what === 'move') {
+          // move : on reçoit vessel (nom) + movement (vecteur de déplacement)
+          // PAS une position absolue — on ne peut pas placer l'objet sur la scène
+          const vessel = (msg as any).vessel as string;
+          const movement = (msg as any).movement as number[];
           const ownTeam = cur.id.split(':')[0];
-          if (vid.startsWith(ownTeam + ':')) newAllies.add(vid);
+
+          // Détecter les alliés (même équipe)
+          const newAllies = new Set(cur.allies);
+          if (vessel && vessel.startsWith(ownTeam + ':')) {
+            newAllies.add(vessel);
+          }
+
+          const log = movement
+            ? `👁 ${vessel} s'est déplacé de [${movement.join(', ')}]`
+            : `👁 ${vessel} s'est déplacé`;
+
+          this.state$.next({ ...cur, allies: newAllies, log: [log, ...cur.log] });
         }
         if(msg.what === 'move') {
           console.log("On est dans le move");
@@ -187,7 +225,8 @@ export class VesselConnection {
   move3d(dx: number, dy: number, dz: number): void {
     this.cost(5);
     this.send({ type: 'move', direction: [dx, dy, dz] });
-    this.updateScans([dx, dy, dz]);
+    // this.updateScans([dx, dy, dz]);
+    this.updateScannedPositions(dx, dy, dz);
   }
 
           
@@ -233,26 +272,42 @@ export class VesselConnection {
     };
   }
 
+  // Met à jour les positions relatives après un déplacement
+  // Les objets scannés restent valides : on soustrait le vecteur de déplacement
+  private updateScannedPositions(dx: number, dy: number, dz: number): void {
+    const s = this.state$.value;
+    if (!s) return;
+    const updated = s.scanned.map(obj => ({
+      ...obj,
+      position: [
+        obj.position[0] - dx,
+        obj.position[1] - dy,
+        (obj.position[2] ?? 0) - dz
+      ]
+    }));
+    this.state$.next({ ...s, scanned: updated });
+  }
+
   private clearActiveScans(): void {
     const s = this.state$.value;
     if (s) this.state$.next({ ...s, scanned: [] });
   }
 
-  private updateScans(position: number[]): void {
-    const s = this.state$.value;
+  // private updateScans(position: number[]): void {
+  //   const s = this.state$.value;
 
-    const unique = Array.from(
-      new Map(
-       s?.scanned.map(obj => [obj.position.join(','), obj])
-     ).values()
-    );
+  //   const unique = Array.from(
+  //     new Map(
+  //      s?.scanned.map(obj => [obj.position.join(','), obj])
+  //    ).values()
+  //   );
 
-    const updatedList = unique.map(scanObject => {
-     scanObject.position = scanObject.position.map((value, index) => value - position[index])
-     return scanObject}
-    );
-    if (s) this.state$.next({ ...s, scanned: updatedList ?? [] });
-  }
+  //   const updatedList = unique.map(scanObject => {
+  //    scanObject.position = scanObject.position.map((value, index) => value - position[index])
+  //    return scanObject}
+  //   );
+  //   if (s) this.state$.next({ ...s, scanned: updatedList ?? [] });
+  // }
 
   private cost(c: number): void {
     const s = this.state$.value;

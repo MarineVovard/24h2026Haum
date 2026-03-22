@@ -27,10 +27,24 @@ export class AutoPilotService implements OnDestroy {
         });
 
         const msgSub = vessel.messages$.subscribe(msg => {
-          if (msg.type === 'passive_scan' && msg.what === 'move' && (msg as any).vessel) {
-            const vid: string = (msg as any).vessel;
-            const ownPrefix = vessel.state$.value?.id.split(':').slice(0, 1).join(':');
-            if (ownPrefix && vid.startsWith(ownPrefix)) this.friendlyIds.add(vid);
+          if (msg.type !== 'passive_scan' || msg.what !== 'move') return;
+          const vid: string = (msg as any).vessel;
+          if (!vid) return;
+
+          // ownTeam depuis l'état du vaisseau ou depuis vessel.team (si stats pas encore reçu)
+          const state   = vessel.state$.value;
+          const ownTeam = state?.id.split(':')[0] ?? vessel.team;
+
+          if (!ownTeam) {
+            // Équipe inconnue : scan défensif
+            this.reactToEnemyPassiveScan(vessel, vid);
+            return;
+          }
+
+          if (vid.startsWith(ownTeam + ':')) {
+            this.friendlyIds.add(vid);
+          } else {
+            this.reactToEnemyPassiveScan(vessel, vid);
           }
         });
 
@@ -81,8 +95,9 @@ export class AutoPilotService implements OnDestroy {
     const resources = scanned.filter(s => s.what === 'resource');
 
     if (enemies.length > 0 && energy >= 10) { this.shootAt(vessel, enemies[0], energy); return; }
-    if (resources.length > 0 && energy >= 5) { this.moveSafe(vessel, this.closest(resources), scanned); return; }
-    this.explore(vessel, energy, scanned);
+    if (resources.length > 0 && energy >= 10) { this.moveSafe(vessel, this.closest(resources), scanned); return; }
+    
+	 if (energy >= 15) {this.explore(vessel, energy, scanned)};
   }
 
   private tickSurvivor(vessel: VesselConnection): void {
@@ -292,8 +307,8 @@ export class AutoPilotService implements OnDestroy {
   private shootAt(vessel: VesselConnection, enemy: ScannedObject, energy: number): void {
     if (this.isFriendlyPosition(enemy.position, vessel)) return;
     const [dx, dy, dz] = enemy.position;
-    if (energy >= 50) {
-      vessel.fireLaser3d(Math.sign(dx), Math.sign(dy), Math.sign(dz));
+    if (energy >= 75) {
+      vessel.fireIem3d(Math.sign(dx), Math.sign(dy), Math.sign(dz));
     } else if (energy >= 10) {
       vessel.fireTorpedo3d(Math.sign(dx), Math.sign(dy), Math.sign(dz));
     }
@@ -337,11 +352,18 @@ export class AutoPilotService implements OnDestroy {
   }
 
   private getEnemies(scanned: ScannedObject[]): ScannedObject[] {
-    return scanned.filter(s => s.what === 'vessel' && !s.allyVessel);
+    // isActive = true uniquement pour les active_scan → position fiable
+    // Les passive_scan 'move' ne donnent PAS de position → exclus du tir
+    return scanned.filter(s => s.what === 'vessel' && s.isActive && !s.allyVessel);
   }
 
   private getDangers(scanned: ScannedObject[]): ScannedObject[] {
-    return scanned.filter(s => ['vessel','torpedo','mine','explosion','asteroid'].includes(s.what as string));
+    // On ne garde que les objets dont on a une POSITION fiable (active_scan ou explosion passive)
+    // Les passive_scan de type 'move' ne sont PAS inclus : movement ≠ position
+    return scanned.filter(s =>
+      ['vessel','torpedo','mine','explosion','asteroid'].includes(s.what as string)
+      && s.isActive // isActive = true uniquement pour les active_scan et explosions
+    );
   }
 
   private closest(objects: ScannedObject[]): ScannedObject {
@@ -352,6 +374,42 @@ export class AutoPilotService implements OnDestroy {
 
   private norm3d(pos: number[]): number {
     return Math.sqrt((pos[0]??0)**2 + (pos[1]??0)**2 + (pos[2]??0)**2);
+  }
+
+  // Réaction à un passive_scan ennemi : scan actif puis tir laser si trouvé
+  private reactToEnemyPassiveScan(vessel: VesselConnection, enemyId: string): void {
+    const state = vessel.state$.value;
+    if (!state || !state.battleStarted || state.frozen) return;
+    if (state.energy < 5) return; // pas assez d'énergie pour scanner
+
+    // Lancer un scan radar actif
+    vessel.scanRadar();
+
+    // Attendre les réponses active_scan (le serveur répond dans les ~200ms)
+    setTimeout(() => {
+      const updated = vessel.state$.value;
+      if (!updated || updated.frozen) return;
+
+      const now     = Date.now();
+      const enemies = updated.scanned.filter(s =>
+        s.what === 'vessel' && s.isActive && s.ts > now && !s.allyVessel
+      );
+
+      if (enemies.length === 0) return; // aucun ennemi localisé
+
+      // Prendre l'ennemi le plus proche
+      const target = this.closest(enemies);
+      const [dx, dy, dz] = target.position;
+
+      if (this.isFriendlyPosition(target.position, vessel)) return;
+
+      // Tirer laser si énergie suffisante, torpille sinon
+      if (updated.energy >= 50) {
+        vessel.fireLaser3d(Math.sign(dx), Math.sign(dy), Math.sign(dz));
+      } else if (updated.energy >= 10) {
+        vessel.fireTorpedo3d(Math.sign(dx), Math.sign(dy), Math.sign(dz));
+      }
+    }, 400); // 400ms = délai raisonnable pour recevoir les active_scan
   }
 
   private clearVesselSubs(): void {

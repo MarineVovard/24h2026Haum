@@ -51,7 +51,7 @@ export class GridComponent implements OnChanges, AfterViewInit, OnDestroy {
   private shipMesh!: THREE.Mesh;
   private isDragging = false;
   private prevMouse  = { x: 0, y: 0 };
-  private spherical  = { theta: Math.PI / 6, phi: Math.PI / 4, radius: 50 };
+  private spherical  = { theta: Math.PI / 5, phi: 1.1, radius: 60 };
 
   constructor(private ngZone: NgZone) {}
 
@@ -207,10 +207,18 @@ export class GridComponent implements OnChanges, AfterViewInit, OnDestroy {
       });
     }
 
-    // Ajouter les nouveaux objets
-    scanned.forEach(s => {
+    // Afficher uniquement les objets avec position fiable (active_scan ou explosion)
+    scanned.filter(s => s.isActive).forEach(s => {
       const key = this.objKey(s);
-      if (!this.objects.has(key)) {
+      const existing = this.objects.get(key);
+      if (existing) {
+        // Mettre à jour la position du mesh existant (après un déplacement du vaisseau)
+        existing.position.set(
+          s.position[0] ?? 0,
+          s.position[1] ?? 0,
+          s.position[2] ?? 0
+        );
+      } else {
         const mesh = this.createObjectMesh(s);
         this.scene.add(mesh);
         this.objects.set(key, mesh);
@@ -219,17 +227,17 @@ export class GridComponent implements OnChanges, AfterViewInit, OnDestroy {
   }
 
   private objKey(s: ScannedObject): string {
-    return `${s.what}_${s.position.join('_')}`;
+    // Utiliser uid stable si disponible, sinon fallback sur type+position initiale
+    return s.uid ?? `${s.what}_${s.position.join('_')}`;
   }
 
   private createObjectMesh(s: ScannedObject): THREE.Object3D {
     const color = OBJECT_COLORS[s.what] ?? 0xffffff;
-    // Mapping direct serveur → Three.js
-    // Le serveur envoie des coordonnées relatives [x, y, z]
-    // On mappe directement : serveur X→Three X, serveur Y→Three Z, serveur Z→Three Y
+    // Mapping direct : serveur [x, y, z] → Three.js [x, y, z]
+    // Pas de swap — les coordonnées relatives du serveur sont utilisées telles quelles
     const px = s.position[0] ?? 0;
-    const py = s.position[2] ?? 0;
-    const pz = s.position[1] ?? 0;
+    const py = s.position[1] ?? 0;
+    const pz = s.position[2] ?? 0;
 
     let mesh: THREE.Mesh;
 
